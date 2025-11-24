@@ -1,0 +1,15 @@
+name: 功能请求
+description: 有什么新的功能想法？欢迎提交。
+body:
+    - type: markdown
+      attributes:
+          value: |
+              在开始提交功能请求前，请先前往 [里程碑](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/milestones) 检查已经在计划中的事项，如果没有再回来提交以防重复。
+    - type: textarea
+      attributes:
+          label: 描述请求
+          description: 你想要什么功能呢？简单说一下就好了（x
+    - type: textarea
+      attributes:
+          label: 截图
+          description: 如果有附加的截图，可以添加在下面

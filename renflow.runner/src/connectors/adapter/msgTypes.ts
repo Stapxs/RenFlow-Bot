@@ -129,6 +129,8 @@ export abstract class RenMessage {
     abstract time: Date // 消息发送时间
     abstract isMine: boolean // 是否为自己发送的消息
 
+    __meta__ = { className: 'RenMessage' }
+
     /** 获取文本内容 */
     static getTextContent(message: {
         type: RenMessageDataType,

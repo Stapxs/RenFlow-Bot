@@ -5,12 +5,12 @@
 
 import { toast } from './toast'
 import { backend } from '@app/functions/backend'
-import { runtimeData } from './runtime'
 
 let cacheConfigs: { [key: string]: any }
 
 // 设置项的初始值，防止下拉菜单选项为空或者首次使用初始错误
 export const optDefault: { [key: string]: any } = {
+    bots: [],
 }
 
 // =============== 设置项事件 ===============
@@ -279,12 +279,6 @@ export function remove(name: string) {
     saveAll()
 }
 
-// ================ 工具方法 ================
-export function checkDefault(name: string) {
-    return (runtimeData.sysConfig[name] == undefined ||
-        runtimeData.sysConfig[name] == optDefault[name]) ? '' : 'changed'
-}
-
 export default {
     get,
     getRaw,
@@ -294,5 +288,4 @@ export default {
     runAS,
     runASWEvent,
     remove,
-    checkDefault,
 }

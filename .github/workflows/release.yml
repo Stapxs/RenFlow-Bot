@@ -1,0 +1,66 @@
+# 主分支构建发布
+name: build-app
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    init:
+        name: 初始化构建
+        runs-on: ubuntu-latest
+        outputs:
+            version: ${{ steps.step_init.outputs.VERSION }}
+        steps:
+            # 拉取代码
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            # 初始化一些流程需要的环境变量
+            - name: Init Env
+              id: step_init
+              run: echo VERSION=$(node -p "require('./package.json').version") >> $GITHUB_OUTPUT
+
+    build-tauri:
+        name: 构建 Tauri
+        needs: init
+        uses: ./.github/workflows/build-tauri.yml
+        with:
+          version: ${{ needs.init.outputs.version }}
+
+    release:
+        name: 发布构建结果
+        runs-on: ubuntu-latest
+        needs:
+            - init
+            - build-tauri
+        steps:
+            # 下载构建结果
+            - name: Download Artifacts
+              id: download-artifact
+              uses: actions/download-artifact@v4
+              with:
+                  path: ${{ needs.init.outputs.version }}-*
+                  pattern: ${{ needs.init.outputs.version }}-*
+                  merge-multiple: true
+            - name: Artifacts List
+              run: ls -R
+            # 发布构建结果
+            - name: Publish Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: ./${{ needs.init.outputs.version }}-*/*
+                  tag_name: v${{ needs.init.outputs.version }}
+                  body: |
+                      # Release 自动构建
+                      `这是一个自动构建版本，由 GitHub Actions 自动构建并发布。`
+                      ## 更新内容
+                      ${{ github.event.head_commit.message }}
+                      ## 自动构建信息
+                      - 构建时间：${{ github.event.head_commit.timestamp }}
+                      - 构建提交：${{ github.event.head_commit.id }}
+                      - 构建分支：${{ github.event.head_commit.tree_id }}
+                  draft: false
+                  prerelease: false
+                  token: ${{ secrets.ACCESS_TOKEN }}

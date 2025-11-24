@@ -1,18 +1,7 @@
-import { optDefault } from '../option'
-
 export enum BotMsgType {
     CQCode,
     Array
 }
-
-export interface RunTimeDataElem {
-    tags: {
-        firstLoad: boolean,
-        darkMode?: boolean
-    },
-    sysConfig: Record<keyof typeof optDefault, any|null>
-}
-
 export interface ChatInfoElem {
     show: BaseChatInfoElem
     info: {

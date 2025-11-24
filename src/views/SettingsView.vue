@@ -116,7 +116,9 @@ function removeBot(idx: number) {
     saveBots()
 }
 
-onMounted(() => {
+onMounted(async () => {
+    await Option.load()
+
     const saved = Option.get('bots')
     if (saved && Array.isArray(saved)) {
         bots.value = saved

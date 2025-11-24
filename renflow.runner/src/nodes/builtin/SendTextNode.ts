@@ -85,12 +85,13 @@ export class SendTextNode extends BaseNode {
                 message.messageType === 'group' ? id : undefined
             )
         )
-        const data = await bot.callApiSync(action)
+        let data: any = await bot.callApiSync(action)
+        if (Array.isArray(data) && data.length > 0) data = data[0]
         const res = plainToInstance(NcRenApiResponse, data)
-        if(res.retcode !== 0) {
+        if (!res || typeof res.retcode !== 'number' || res.retcode !== 0) {
             return {
                 success: false,
-                error: `发送消息失败 > 错误码：${res.retcode}，信息：${res.message}`
+                error: `发送消息失败 > 错误码：${(res && (res.retcode ?? JSON.stringify(res))) || 'unknown'}，信息：${(res && res.message) || ''}`
             }
         } else {
             return {

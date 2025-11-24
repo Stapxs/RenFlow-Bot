@@ -142,9 +142,12 @@ function checkTriggerConfig(params: any, data: any) {
         try {
             // 获取 triggerConfig.filterParam 对应的字段内容
             const results = jp.query(data, triggerConfig.filterParam)
-            const className = data.__meta__?.className || Object.getPrototypeOf(data.constructor).name || data.constructor?.name
+
+            // 获取可能的类名标识（优先使用显式元数据）
+            const explicitClassName = data?.__meta__?.className
+
             // 消息匹配处理
-            if (results.length == 1 && className === 'RenMessage') {
+            if (results.length == 1 && explicitClassName === 'RenMessage') {
                 if(!triggerConfig.includeSelf && (results[0] as RenMessage).isMine) {
                     throw new Error('跳过自己发送的消息')
                 }

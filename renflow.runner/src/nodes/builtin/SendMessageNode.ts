@@ -135,12 +135,14 @@ export class SendMessageNode extends BaseNode {
             )
         )
 
-        const data = await bot.callApiSync(action)
+        let data: any = await bot.callApiSync(action)
+        // 有些适配器/实现可能返回一个数组包裹的响应，取第一个元素作为实际响应
+        if (Array.isArray(data) && data.length > 0) data = data[0]
         const res = plainToInstance(NcRenApiResponse, data)
-        if (res.retcode !== 0) {
+        if (!res || typeof res.retcode !== 'number' || res.retcode !== 0) {
             return {
                 success: false,
-                error: `发送消息失败 > 错误码：${res.retcode}，信息：${res.message}`
+                error: `发送消息失败 > 错误码：${(res && (res.retcode ?? JSON.stringify(res))) || 'unknown'}，信息：${(res && res.message) || ''}`
             }
         } else {
             return {
