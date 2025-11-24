@@ -37,6 +37,37 @@ const nodes = nodeManager.getNodeList()
 console.log('可用节点:', nodes)
 ```
 
+### 安装（优先使用 Yarn）
+
+推荐使用 `yarn` 安装与运行（支持全局安装或作为项目依赖）。以下示例分别展示 `yarn` 与 `npm` 两种用法。
+
+```bash
+# 使用 Yarn 全局安装（可作为 CLI 使用，传统 yarn v1）
+yarn global add renflow.runner
+
+# 或在项目中作为依赖
+yarn add renflow.runner
+
+# 等价的 npm 命令（保留参考）
+# npm install -g renflow.runner
+# npm install --save renflow.runner
+```
+
+### CLI 使用（安装后）
+
+安装后会提供 `renflow-runner` 可执行器，示例：
+
+```bash
+# 使用本地 JSON 工作流文件直接执行并退出
+renflow-runner ./examples/my-workflow.json
+
+# 运行一个工作集包（.renflow/.rfw/.zip），并在触发后持续运行
+renflow-runner ./my-bots-package.renflow
+
+# 使用环境变量开启调试日志
+RENFLOW_LOG=debug renflow-runner ./my-bots-package.renflow
+```
+
 ### 自定义日志级别
 
 ```typescript

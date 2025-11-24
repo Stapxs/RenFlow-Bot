@@ -168,9 +168,9 @@
 </template>
 
 <script setup lang="ts">
-import { LogLevel, init, nodeManager as runnerNodeManager, WorkflowConverter, BaseRenMessage } from 'renflow.runner'
+import { LogLevel, init, nodeManager as runnerNodeManager, BaseRenMessage } from 'renflow.runner'
 
-import { MergeNode, type NodeMetadata, type VueFlowWorkflow } from 'renflow.runner'
+import { MergeNode, type NodeMetadata } from 'renflow.runner'
 import type { Node, Edge } from '@vue-flow/core'
 
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
@@ -245,7 +245,6 @@ init(LogLevel.DEBUG, {
 })
 
 const nodeManager = runnerNodeManager
-const workflowConverter = new WorkflowConverter()
 
 // 打开编辑器（复制当前值到本地副本）
 function openFlowEditor() {
@@ -515,48 +514,6 @@ onMounted(async () => {
                 }
             })
 
-            // 监听执行接管请求：如果当前编辑的工作流被请求执行，则在编辑窗口内以 minDelay=1000 执行并回复 handled
-            backend.addListener('workflow:execute:request', async (evt: any) => {
-                const payload = evt?.payload || {}
-                const id = payload.id
-
-                const type = payload.type
-                const triggerP = payload.data
-                // payload 传递会丢失类型信息，需手动还原
-                if(type && triggerP.constructor?.name != type) {
-                    triggerP.__meta__ = {
-                        className: type
-                    }
-                }
-
-                if (id !== workflowInfo.value.id) return
-
-                // 将当前编辑器中的执行数据返回给 ListView 由其进行执行
-                try {
-                    if (!workflowInfo.value.id) return
-                    const vueFlowWorkflow: VueFlowWorkflow = {
-                        id: workflowInfo.value.id || `workflow_temp_${Date.now()}`,
-                        name: workflowInfo.value.name || '未命名工作流',
-                        description: workflowInfo.value.description || '',
-                        triggerType: workflowInfo.value.triggerType,
-                        triggerTypeLabel: workflowInfo.value.triggerTypeLabel,
-                        triggerName: workflowInfo.value.triggerName,
-                        triggerLabel: workflowInfo.value.triggerLabel,
-                        nodes: JSON.parse(JSON.stringify(nodes.value)),
-                        edges: JSON.parse(JSON.stringify(edges.value)),
-                        createdAt: Date.now(),
-                        updatedAt: Date.now()
-                    }
-
-                    const executionData = workflowConverter.convert(vueFlowWorkflow)
-
-                    const { emit } = await import('@tauri-apps/api/event')
-                    // 返回 executionData 与触发数据，ListView 会接收并执行
-                    void emit('workflow:execute:handled', { id, executionData, data: triggerP })
-                } catch (e) {
-                    logger.add(LogType.ERR, '向 ListView 返回执行数据失败', e)
-                }
-            })
             // 监听节点开始
             backend.addListener('workflow:execute:nodeStart', (evt: any) => {
                 const payload = evt?.payload || {}

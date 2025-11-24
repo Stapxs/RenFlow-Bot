@@ -1,5 +1,3 @@
-import { runtimeData } from '@app/functions/runtime'
-
 export function setAutoDark() {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -23,13 +21,6 @@ export function setAutoDark() {
 }
 
 function changeColorMode(mode: string) {
-    if (!runtimeData.tags.firstLoad) {
-        // 启用颜色渐变动画
-        document.body.style.transition =
-            'background, color, background-color .3s'
-    } else {
-        runtimeData.tags.firstLoad = false
-    }
     // 切换颜色
     const match_list = ['color-.*.css', 'prism-.*.css', 'append-.*.css']
     const css_list = document.getElementsByTagName('link')
@@ -74,6 +65,4 @@ function changeColorMode(mode: string) {
             document.documentElement,
         ).getPropertyValue('--color-main')
     }
-
-    runtimeData.tags.darkMode = mode === 'dark'
 }

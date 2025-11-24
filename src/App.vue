@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import app from '@app/main'
-import Option from './functions/option'
 
 import { onMounted, ref } from 'vue'
 import { backend } from '@app/functions/backend'
 import { setAutoDark } from '@app/functions/utils/app'
 import { setupToast } from '@app/functions/toast'
-import { runtimeData } from './functions/runtime'
 
 import Toast from '@app/components/AppToast.vue'
 import GlobalConfirm from '@app/components/GlobalConfirm.vue'
@@ -23,11 +21,10 @@ function handleAppbarMouseDown(_: MouseEvent) {
 }
 
 function barMainClick() {
-    // handle main bar click (placeholder)
+    // do nothing
 }
 
 function controllWin(action: 'minimize' | 'close') {
-    // handle window control actions (placeholder)
     action
 }
 
@@ -36,7 +33,6 @@ onMounted(async () => {
 
     await backend.init()
     setAutoDark()
-    runtimeData.sysConfig = await Option.load()
     // 设置 Toast
     if (toastRef.value) {
         setupToast(app, toastRef.value)

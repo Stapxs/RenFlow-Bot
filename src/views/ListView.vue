@@ -305,6 +305,7 @@ const handleCreateWorkflow = async (workflow: any) => {
 // 组件挂载时加载工作流列表
 onMounted(async () => {
     loadWorkflowList()
+    await Option.load()
 
     const container = document.getElementById('mac-controller')
     if(container) {
@@ -381,7 +382,7 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
             runningWorkflows.value.add(workflowId)
 
             try {
-                const { emit, listen } = await import('@tauri-apps/api/event')
+                const { listen } = await import('@tauri-apps/api/event')
 
                 // 监听一次性的 handled 事件（短超时） — 如果接收到 executionData，ListView 将执行该数据
                 const handledPromise = new Promise<any>((resolve) => {
@@ -404,10 +405,6 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                     }, 400)
                 })
 
-                // 发出请求，编辑窗口若打开且匹配会在收到后处理并发回 handled
-                // 带上触发数据 data，便于编辑窗口在本地重放执行
-                void emit('workflow:execute:request',
-                    { id: workflowId, data, type: Object.getPrototypeOf(data.constructor).name || data.constructor.name })
                 const handledPayload = await handledPromise
 
                 // 如果编辑窗口返回了 executionData，则本窗口负责执行该执行数据并跳过原本的本地执行
