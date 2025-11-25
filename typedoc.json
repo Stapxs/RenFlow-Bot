@@ -1,0 +1,9 @@
+{
+  "entryPoints": ["renflow.runner/src/index.ts"],
+  "out": "renflow.document/Runner-API",
+  "plugin": ["typedoc-plugin-markdown"],
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "readme": "renflow.runner/README.md",
+  "tsconfig": "renflow.runner/tsconfig.json"
+}

@@ -8,6 +8,12 @@
   ],
   "scripts": {
     "lint": "eslint . --ext .ts,.vue",
+
+    "docs:gen": "typedoc",
+    "docs:dev": "typedoc && vitepress dev renflow.document",
+    "docs:build": "typedoc && vitepress build renflow.document",
+    "docs:preview": "typedoc && vitepress preview renflow.document",
+
     "build:runner": "yarn workspace renflow.runner build",
     "dev": "vite",
     "dev:tauri": "tauri dev -c src-tauri/tauri.conf.json",
@@ -38,9 +44,14 @@
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.26.0",
     "html2canvas": "^1.4.1",
-    "renflow.runner": "*",
+    "markdown-it-shikiji": "^0.10.2",
+    "renflow-runner": "*",
+    "typedoc": "^0.28.14",
+    "typedoc-plugin-markdown": "^4.9.0",
     "typescript": "~5.9.3",
     "vite": "^7.1.7",
+    "vitepress": "^1.6.4",
+    "vitepress-sidebar": "^1.33.0",
     "vue": "^3.5.22",
     "vue-router": "4",
     "vue-tsc": "^3.1.0",
