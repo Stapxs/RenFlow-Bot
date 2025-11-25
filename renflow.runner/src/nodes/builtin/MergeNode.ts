@@ -1,5 +1,5 @@
-import { BaseNode } from '../BaseNode'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
+import { BaseNode } from '../BaseNode.js'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
 
 // TODO: ALL 模式暂时还没有实现
 

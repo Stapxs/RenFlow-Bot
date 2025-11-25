@@ -1,7 +1,7 @@
-import { Logger } from '../../utils/logger'
-import { fillTextTemplate } from '../../utils/node'
-import { BaseNode } from '../BaseNode'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
+import { Logger } from '../../utils/logger.js'
+import { fillTextTemplate } from '../../utils/node.js'
+import { BaseNode } from '../BaseNode.js'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
 
 /**
  * 简单的 HTTP 请求节点，基于全局 fetch（Node >=18 / 浏览器）

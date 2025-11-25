@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
-import type { AdapterId, AdapterOptions, AdapterMessage, AdapterEventHandler, AdapterEventType } from './types'
-import { getEventMeta } from './decorators'
-import { RenApiData } from './msgTypes'
+import type { AdapterId, AdapterOptions, AdapterMessage, AdapterEventHandler, AdapterEventType } from './types.js'
+import { getEventMeta } from './decorators.js'
+import { RenApiData } from './msgTypes.js'
 
 export interface BotAdapter {
     id: AdapterId

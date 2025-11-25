@@ -6,15 +6,15 @@ import jp from 'jsonpath'
 import shellQuote from 'shell-quote'
 import mri from 'mri'
 
-import { RenMessage, WorkflowConverter, WorkflowEngine, WorkflowExecutionResult } from '../index'
-import { Logger } from '../utils/logger'
-import { WorkflowExecution } from './types'
-import { BaseBotAdapter } from '../connectors/index'
-import { startsWithArray } from '../utils/util'
+import { RenMessage, WorkflowConverter, WorkflowEngine, WorkflowExecutionResult } from '../index.js'
+import { Logger } from '../utils/logger.js'
+import { WorkflowExecution } from './types.js'
+import { BaseBotAdapter } from '../connectors/index.js'
+import { startsWithArray } from '../utils/util.js'
 
-export * from './types'
-export * from './converter'
-export * from './engine'
+export * from './types.js'
+export * from './converter.js'
+export * from './engine.js'
 
 /**
  * 运行工作流并处理回调

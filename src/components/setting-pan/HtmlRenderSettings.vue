@@ -6,10 +6,10 @@ import type { CmComponentRef } from 'codemirror-editor-vue3'
 import type { Editor, EditorConfiguration } from 'codemirror'
 import { useSanitizeHtml } from '@app/functions/utils/useSanitizeHtml'
 
-import 'codemirror/mode/xml/xml'
-import 'codemirror/mode/javascript/javascript'
-import 'codemirror/mode/css/css'
-import 'codemirror/mode/htmlmixed/htmlmixed'
+import 'codemirror/mode/xml/xml.js'
+import 'codemirror/mode/javascript/javascript.js'
+import 'codemirror/mode/css/css.js'
+import 'codemirror/mode/htmlmixed/htmlmixed.js'
 
 interface Props {
     nodeId: string

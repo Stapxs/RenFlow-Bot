@@ -1,3 +1,3 @@
-export * from './types'
-export * from './BotAdapter'
-export { event } from './decorators'
+export * from './types.js'
+export * from './BotAdapter.js'
+export { event } from './decorators.js'

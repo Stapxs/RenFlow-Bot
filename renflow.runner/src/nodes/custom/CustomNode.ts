@@ -1,5 +1,5 @@
-import { BaseNode } from '../BaseNode'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
+import { BaseNode } from '../BaseNode.js'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
 
 /**
  * 自定义节点

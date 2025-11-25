@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "workspaces": [
-    "renflow.runner"
+    "renflow-runner"
   ],
   "scripts": {
     "lint": "eslint . --ext .ts,.vue",

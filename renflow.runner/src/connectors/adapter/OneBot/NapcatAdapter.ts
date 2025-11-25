@@ -1,11 +1,11 @@
-import { RenMessageBodyData, RenMessageDataType } from '../msgTypes'
-import { BaseBotAdapter } from '../BotAdapter'
-import event from '../decorators'
-import type { AdapterMessage, NapcatAdapterOptions } from '../types'
+import { RenMessageBodyData, RenMessageDataType } from '../msgTypes.js'
+import { BaseBotAdapter } from '../BotAdapter.js'
+import event from '../decorators.js'
+import type { AdapterMessage, NapcatAdapterOptions } from '../types.js'
 import { instanceToPlain, plainToInstance } from 'class-transformer'
-import { NapcatRenMessage, NcRenApiData, NcRenApiParamsMessage } from './NapcatMsgTypes'
-import { Logger } from '../../../utils/logger'
-import type { RenApiData } from '../msgTypes'
+import { NapcatRenMessage, NcRenApiData, NcRenApiParamsMessage } from './napcatMsgTypes.js'
+import { Logger } from '../../../utils/logger.js'
+import type { RenApiData } from '../msgTypes.js'
 
 
 /**

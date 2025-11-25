@@ -1,10 +1,10 @@
-import { BaseBotAdapter } from '../../connectors/index'
-import { RenMessage, RenMessageDataType, RenMessageText } from '../../connectors/adapter/msgTypes'
-import { BaseNode } from '../BaseNode'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
-import { NcRenApiData, NcRenApiParamsMessage, NcRenApiResponse } from '../../connectors/adapter/onebot/NapcatMsgTypes'
+import { BaseBotAdapter } from '../../connectors/index.js'
+import { RenMessage, RenMessageDataType, RenMessageText } from '../../connectors/adapter/msgTypes.js'
+import { BaseNode } from '../BaseNode.js'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
+import { NcRenApiData, NcRenApiParamsMessage, NcRenApiResponse } from '../../connectors/adapter/onebot/napcatMsgTypes.js'
 import { plainToInstance } from 'class-transformer'
-import { fillTextTemplate, getGlobal } from '../../utils/node'
+import { fillTextTemplate, getGlobal } from '../../utils/node.js'
 
 /**
  * 发送文本消息节点

@@ -10,8 +10,8 @@ import type {
     WorkflowExecution,
     ExecutionNode,
     TriggerConfig
-} from './types'
-import { Logger } from '../utils/logger'
+} from './types.js'
+import { Logger } from '../utils/logger.js'
 
 export class WorkflowConverter {
     private logger: Logger

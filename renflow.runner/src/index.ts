@@ -5,12 +5,12 @@
 
 import 'reflect-metadata'
 
-import { Logger, LogLevel } from './utils/logger'
-import { nodeManager } from './nodes/index'
+import { Logger, LogLevel } from './utils/logger.js'
+import { nodeManager } from './nodes/index.js'
 import path from 'path'
 import fs from 'fs/promises'
 import readline from 'readline'
-import { runWorkflowByTrigger, WorkflowConverter, WorkflowEngine } from './workflow/index'
+import { runWorkflowByTrigger, WorkflowConverter, WorkflowEngine } from './workflow/index.js'
 
 // 检测是否在 Node.js 环境中运行
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node
@@ -98,7 +98,7 @@ async function main() {
 
                         logger.info(`已加载 ${workflows.length} 个工作流，准备连接 ${botsConfig.length} 个连接`)
 
-                        const { connectorManager } = await import('./connectors/index')
+                        const { connectorManager } = await import('./connectors/index.js')
                         const adapters: any[] = []
 
                         // 在缺少 token 时询问用户输入
@@ -213,10 +213,8 @@ async function main() {
     logger.info('Ren Flow Runner 已启动')
 }
 
-// 仅在 Node.js 环境且直接运行时启动应用
-if (isNode && import.meta.url === `file://${process.argv[1]}`) {
-    const logger = new Logger('Main')
-
+const logger = new Logger('Main')
+if (isNode) {
     main().catch((error) => {
         logger.error('启动失败:', error)
         process.exit(1)
@@ -240,14 +238,16 @@ if (isNode && import.meta.url === `file://${process.argv[1]}`) {
             process.exit(0)
         }
     })
+} else {
+    logger.info('Ren Flow Runner 模块已加载')
 }
 
 // 导出模块供其他项目使用
-export { Logger, LogLevel } from './utils/logger'
-export * from './nodes/index'
-export * from './workflow/index'
-export * from './connectors/adapter/msgTypes'
-export { connectorManager } from './connectors/index'
+export { Logger, LogLevel } from './utils/logger.js'
+export * from './nodes/index.js'
+export * from './workflow/index.js'
+export * from './connectors/adapter/msgTypes.js'
+export { connectorManager } from './connectors/index.js'
 
 /**
  * 全局初始化入口。

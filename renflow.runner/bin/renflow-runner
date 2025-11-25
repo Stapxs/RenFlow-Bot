@@ -1,6 +1,0 @@
-#!/usr/bin/env node
-
-import('./dist/index.js').catch((err) => {
-  console.error('Failed to start renflow-runner:', err && err.stack ? err.stack : err)
-  process.exit(1)
-})

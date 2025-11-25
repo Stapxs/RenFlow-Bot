@@ -1,8 +1,8 @@
-import { BaseNode } from './BaseNode'
-import { builtinNodes } from './builtin/index'
-import { CustomNode } from './custom/CustomNode'
-import type { NodeMetadata, NodeContext, NodeExecutionResult, NodeCategory, NodeCategoryInfo } from './types'
-import { Logger, LogLevel } from '../utils/logger'
+import { BaseNode } from './BaseNode.js'
+import { builtinNodes } from './builtin/index.js'
+import { CustomNode } from './custom/CustomNode.js'
+import type { NodeMetadata, NodeContext, NodeExecutionResult, NodeCategory, NodeCategoryInfo } from './types.js'
+import { Logger, LogLevel } from '../utils/logger.js'
 
 /**
  * 预定义的节点分类信息

@@ -1,6 +1,6 @@
 // 简易的连接器管理器
 
-import { RenApiData } from './adapter/msgTypes'
+import { RenApiData } from './adapter/msgTypes.js'
 
 // 负责注册/获取适配器，并提供队列适配器的工厂方法
 export class ConnectorManager {
@@ -43,7 +43,7 @@ export class ConnectorManager {
 
         if (type === 'napcat') {
             // 支持 OneBot 实现（Napcat）
-            const mod = await import('./adapter/onebot/NapcatAdapter')
+            const mod = await import('./adapter/onebot/NapcatAdapter.js')
             const NapcatAdapter = (mod && (mod.NapcatAdapter || mod.default))
             if (!NapcatAdapter) throw new Error('NapcatAdapter not found')
             const adapter = new NapcatAdapter(id, opts)

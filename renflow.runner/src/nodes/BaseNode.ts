@@ -1,5 +1,5 @@
-import { Logger } from '../utils/logger'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from './types'
+import { Logger } from '../utils/logger.js'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from './types.js'
 
 /**
  * 节点基类

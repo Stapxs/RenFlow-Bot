@@ -1,13 +1,13 @@
-import { ConsoleNode } from './ConsoleNode'
-import { NoteNode } from './NoteNode'
-import { SendTextNode } from './SendTextNode'
-import { CustomJSNode } from './CustomJSNode'
-import { IfElseNode } from './IfElseNode'
-import { HtmlRenderNode } from './HtmlRenderNode'
-import { HttpRequestNode } from './HttpRequestNode'
-import { SendMessageNode } from './SendMessageNode'
-import { CommandAnalNode } from './CommandAnalNode'
-import { MergeNode } from './MergeNode'
+import { ConsoleNode } from './ConsoleNode.js'
+import { NoteNode } from './NoteNode.js'
+import { SendTextNode } from './SendTextNode.js'
+import { CustomJSNode } from './CustomJSNode.js'
+import { IfElseNode } from './IfElseNode.js'
+import { HtmlRenderNode } from './HtmlRenderNode.js'
+import { HttpRequestNode } from './HttpRequestNode.js'
+import { SendMessageNode } from './SendMessageNode.js'
+import { CommandAnalNode } from './CommandAnalNode.js'
+import { MergeNode } from './MergeNode.js'
 
 /**
  * 导出所有内置节点
