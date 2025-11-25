@@ -13,11 +13,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-2022, ubuntu-22.04, ubuntu-22.04-arm]
+        os: [windows-2022, ubuntu-22.04]
 
     steps:
       - name: 安装构建依赖
-        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm'
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libglib2.0-dev \
@@ -29,7 +29,8 @@ jobs:
                                 libwebkit2gtk-4.0-dev \
                                 libwebkit2gtk-4.1-dev \
                                 libjavascriptcoregtk-4.0-dev \
-                                libayatana-appindicator3-dev
+                                libayatana-appindicator3-dev \
+                                libfuse2
       - name: 拉取代码
         uses: actions/checkout@v4
         with:
@@ -40,7 +41,7 @@ jobs:
             node-version: 20.19.0
       # 更新依赖
       - name: 更新依赖
-        run: yarn
+        run: yarn install --mode=classic
       - name: 设置 Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -55,11 +56,7 @@ jobs:
         run: yarn build:tauri -t x86_64-pc-windows-msvc -b nsis
       - name: 构建 Tauri 应用
         if: matrix.os == 'ubuntu-22.04'
-        run: yarn build:tauri -t x86_64-unknown-linux-gnu -b appimage,deb
-      - name: 构建 Tauri 应用
-        if: matrix.os == 'ubuntu-22.04-arm'
-        run: yarn build:tauri -t aarch64-unknown-linux-gnu -b appimage,deb
-
+        run: yarn build:tauri -t x86_64-unknown-linux-gnu -b deb
       - name: 准备产物目录
         if: matrix.os != 'windows-2022'
         run: |

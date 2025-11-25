@@ -1,5 +1,5 @@
 import { Expose, Type, Transform } from 'class-transformer'
-import { RenApiData, RenApiParamsMessage, RenMessage, RenMessageDataType, RenMessageImage, RenMessageReply, RenMessageText, SenderDTO } from '../msgTypes.js'
+import { RenApiData, RenApiParamsMessage, RenMessage, RenMessageDataType, RenMessageImage, RenMessageReply, RenMessageText, SenderDTO } from '../msgTypes'
 
 
 class NcRenMessageImage extends RenMessageImage {

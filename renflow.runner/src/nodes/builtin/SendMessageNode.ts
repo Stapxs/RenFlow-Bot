@@ -1,10 +1,10 @@
 import { plainToInstance } from 'class-transformer'
-import { NcRenApiData, NcRenApiParamsMessage, NcRenApiResponse } from '../../connectors/adapter/onebot/napcatMsgTypes.js'
-import { BaseBotAdapter } from '../../connectors/index.js'
-import { RenMessage, RenMessageBodyData, RenMessageDataType, RenMessageImage, RenMessageText } from '../../index.js'
-import { BaseNode } from '../BaseNode.js'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
-import { fillTextTemplate, getGlobal } from '../../utils/node.js'
+import { NcRenApiData, NcRenApiParamsMessage, NcRenApiResponse } from '../../connectors/adapter/onebot/NapcatMsgTypes'
+import { BaseBotAdapter } from '../../connectors/index'
+import { RenMessage, RenMessageBodyData, RenMessageDataType, RenMessageImage, RenMessageText } from '../../index'
+import { BaseNode } from '../BaseNode'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
+import { fillTextTemplate, getGlobal } from '../../utils/node'
 
 /**
  * 发送复杂消息节点

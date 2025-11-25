@@ -3,10 +3,10 @@
  * 负责执行转换后的工作流
  */
 
-import type { WorkflowExecution, ExecutionNode } from './types.js'
-import type { NodeContext, NodeExecutionResult } from '../nodes/types.js'
-import { NodeManager } from '../nodes/NodeManager.js'
-import { Logger } from '../utils/logger.js'
+import type { WorkflowExecution, ExecutionNode } from './types'
+import type { NodeContext, NodeExecutionResult } from '../nodes/types'
+import { NodeManager } from '../nodes/NodeManager'
+import { Logger } from '../utils/logger'
 
 /**
  * 执行上下文

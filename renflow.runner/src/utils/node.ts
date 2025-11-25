@@ -1,5 +1,5 @@
-import type { NodeContext } from '../nodes/types.js'
-import { getValue } from './util.js'
+import type { NodeContext } from '../nodes/types'
+import { getValue } from './util'
 
 /**
  * 从全局存储读取值

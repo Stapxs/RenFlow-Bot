@@ -1,7 +1,7 @@
-import { getGlobal } from '../../utils/node.js'
-import { getValue } from '../../utils/util.js'
-import { BaseNode } from '../BaseNode.js'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
+import { getGlobal } from '../../utils/node'
+import { getValue } from '../../utils/util'
+import { BaseNode } from '../BaseNode'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
 
 /**
  * 将 HTML 模板渲染为图片节点

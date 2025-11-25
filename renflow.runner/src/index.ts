@@ -5,12 +5,12 @@
 
 import 'reflect-metadata'
 
-import { Logger, LogLevel } from './utils/logger.js'
-import { nodeManager } from './nodes/index.js'
+import { Logger, LogLevel } from './utils/logger'
+import { nodeManager } from './nodes/index'
 import path from 'path'
 import fs from 'fs/promises'
 import readline from 'readline'
-import { runWorkflowByTrigger, WorkflowConverter, WorkflowEngine } from './workflow/index.js'
+import { runWorkflowByTrigger, WorkflowConverter, WorkflowEngine } from './workflow/index'
 
 // 检测是否在 Node.js 环境中运行
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node
@@ -98,7 +98,7 @@ async function main() {
 
                         logger.info(`已加载 ${workflows.length} 个工作流，准备连接 ${botsConfig.length} 个连接`)
 
-                        const { connectorManager } = await import('./connectors/index.js')
+                        const { connectorManager } = await import('./connectors/index')
                         const adapters: any[] = []
 
                         // 在缺少 token 时询问用户输入
@@ -243,11 +243,11 @@ if (isNode && import.meta.url === `file://${process.argv[1]}`) {
 }
 
 // 导出模块供其他项目使用
-export { Logger, LogLevel } from './utils/logger.js'
-export * from './nodes/index.js'
-export * from './workflow/index.js'
-export * from './connectors/adapter/msgTypes.js'
-export { connectorManager } from './connectors/index.js'
+export { Logger, LogLevel } from './utils/logger'
+export * from './nodes/index'
+export * from './workflow/index'
+export * from './connectors/adapter/msgTypes'
+export { connectorManager } from './connectors/index'
 
 /**
  * 全局初始化入口。

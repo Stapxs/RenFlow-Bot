@@ -37,7 +37,6 @@ pub fn win_create_window(app_handle: AppHandle, options: CreateWindowOptions) ->
         options.height.unwrap_or(530.0)
     )
     .disable_drag_drop_handler()
-    .traffic_light_position(tauri::LogicalPosition::new(20.0, 30.0))
     .transparent(true);
 
     // 平台特定配置
@@ -47,6 +46,7 @@ pub fn win_create_window(app_handle: AppHandle, options: CreateWindowOptions) ->
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .hidden_title(true)
             .background_color(tauri::window::Color(0, 0, 0, 1))
+            .traffic_light_position(tauri::LogicalPosition::new(20.0, 30.0))
             .accept_first_mouse(true)
             .effects(tauri::window::EffectsBuilder::new()
                 .effects(vec![tauri::window::Effect::Menu])

@@ -1,5 +1,5 @@
-import { WorkflowEngine } from '../workflow/index.js'
-import type { WorkflowExecution } from '../workflow/types.js'
+import { WorkflowEngine } from '../workflow/index'
+import type { WorkflowExecution } from '../workflow/types'
 
 async function run() {
   const wf: WorkflowExecution = {

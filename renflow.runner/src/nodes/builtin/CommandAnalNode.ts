@@ -1,8 +1,8 @@
-import { BaseNode } from '../BaseNode.js'
-import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
+import { BaseNode } from '../BaseNode'
+import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types'
 import shellQuote from 'shell-quote'
 import mri from 'mri'
-import { fillTextTemplate } from '../../utils/node.js'
+import { fillTextTemplate } from '../../utils/node'
 
 /**
  * 命令解析器
