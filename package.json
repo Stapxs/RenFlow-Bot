@@ -23,6 +23,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",
     "events": "^3.3.0",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.0",

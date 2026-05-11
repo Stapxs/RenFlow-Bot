@@ -48,7 +48,7 @@ export interface OutputField {
 /**
  * 节点分类（用于 UI 展示分组）
  */
-export type NodeCategory = 'input' | 'output' | 'transform' | 'control' | 'logic' | 'data' | 'network' | 'bot' | 'flow' | 'custom'
+export type NodeCategory = 'input' | 'output' | 'transform' | 'control' | 'logic' | 'data' | 'network' | 'llm' | 'bot' | 'flow' | 'custom'
 
 /**
  * 节点分类信息

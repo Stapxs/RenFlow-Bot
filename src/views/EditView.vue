@@ -631,6 +631,7 @@ const categoryNames: Record<string, string> = {
     logic: '逻辑',
     data: '数据',
     network: '网络',
+    llm: '大模型',
     bot: '机器人',
     flow: '流程',
     custom: '自定义'

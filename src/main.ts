@@ -1,3 +1,4 @@
+import 'reflect-metadata'
 import App from './App.vue'
 import router from './router'
 import { windowManager } from './functions/window'

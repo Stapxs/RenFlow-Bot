@@ -10,6 +10,7 @@ import { CommandAnalNode } from './CommandAnalNode.js'
 import { MergeNode } from './MergeNode.js'
 import { SystemInfoNode } from './SystemInfoNode.js'
 import { GetLoginInfoNode } from './GetLoginInfoNode.js'
+import { LlmNode } from './LlmNode.js'
 
 /**
  * 导出所有内置节点
@@ -27,6 +28,7 @@ export const builtinNodes = [
     new MergeNode(),
     new SystemInfoNode(),
     new GetLoginInfoNode(),
+    new LlmNode(),
 ]
 
 export {
@@ -42,4 +44,5 @@ export {
     MergeNode,
     SystemInfoNode,
     GetLoginInfoNode,
+    LlmNode,
 }
