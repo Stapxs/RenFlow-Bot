@@ -244,4 +244,8 @@ div.cm-s-bcui.CodeMirror {
 .cm-s-bcui span.cm-tag {
     color: var(--orange);
 }
+
+.CodeMirror-hscrollbar::-webkit-scrollbar {
+    height: 7px;
+}
 </style>

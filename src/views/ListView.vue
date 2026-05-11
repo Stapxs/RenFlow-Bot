@@ -90,10 +90,10 @@ import { WorkflowStorage } from '@app/functions/workflow'
 import type { WorkflowListItem } from '@app/functions/workflow'
 import { Logger, LogType } from '@app/functions/base'
 import { toast } from '@app/functions/toast'
-import { connectorManager, RenMessage, runWorkflowByTrigger, type VueFlowWorkflow, WorkflowConverter, type WorkflowExecution } from 'renflow.runner'
+import { connectorManager, RenMessage, runWorkflowByTrigger, type VueFlowWorkflow, WorkflowConverter, type WorkflowExecution } from 'renflow-runner'
 
 import WorkflowDialog from '@app/components/WorkflowDialog.vue'
-import type { BaseBotAdapter } from 'renflow.runner/dist/connectors'
+import type { BaseBotAdapter } from 'renflow-runner'
 
 const router = useRouter()
 const logger = new Logger()
@@ -379,8 +379,6 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
             // 如果不是桌面模式，编辑窗口不会接管执行，应当允许工作流继续执行
             if (!backend.isDesktop()) return true
 
-            runningWorkflows.value.add(workflowId)
-
             try {
                 const { listen } = await import('@tauri-apps/api/event')
 
@@ -412,10 +410,20 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                     try {
                         // 执行来自编辑器的执行数据（只执行该工作流）
                         await runWorkflowByTrigger([handledPayload.executionData], data, { timeout: 60000, bot }, {
-                            onNodeStart: async (wfId: string, nodeId: string) => {
+                           onWorkflowStart: async (wfId: string) => {
+                                runningWorkflows.value.add(wfId)
                                 try {
                                     const { emit } = await import('@tauri-apps/api/event')
-                                    void emit('workflow:execute:nodeStart', { id: wfId, nodeId })
+                                    void emit('workflow:execute:start', { id: wfId })
+                                } catch (e) {
+                                    logger.add(LogType.ERR, '发射 workflow:execute:start 事件失败', e)
+                                }
+                                return true
+                            },
+                            onNodeStart: async (wfId: string, nodeId: string, input: any) => {
+                                try {
+                                    const { emit } = await import('@tauri-apps/api/event')
+                                    void emit('workflow:execute:nodeStart', { id: wfId, nodeId, input })
                                 } catch (e) {
                                     logger.add(LogType.ERR, '发射 workflow:execute:nodeStart 事件失败', e)
                                 }
@@ -437,6 +445,7 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                                 }
                             },
                             onWorkflowComplete: async (wfId: string, workflowResult: any) => {
+                                runningWorkflows.value.delete(wfId)
                                 try {
                                     const { emit } = await import('@tauri-apps/api/event')
                                     void emit('workflow:execute:complete', { id: wfId, success: !!workflowResult.success, logs: workflowResult.logs })
@@ -462,11 +471,11 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                 return true
             }
         },
-        onNodeStart: async (workflowId: string, nodeId: string) => {
+        onNodeStart: async (workflowId: string, nodeId: string, input: any) => {
             try {
                 if (backend.isDesktop()) {
                     const { emit } = await import('@tauri-apps/api/event')
-                    void emit('workflow:execute:nodeStart', { id: workflowId, nodeId })
+                    void emit('workflow:execute:nodeStart', { id: workflowId, nodeId, input })
                 }
             } catch (e) {
                 logger.add(LogType.ERR, '发射 workflow:execute:nodeStart 事件失败', e)
@@ -490,17 +499,6 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                 }
             } catch (e) {
                 logger.add(LogType.ERR, '发射 workflow:execute:nodeError 事件失败', e)
-            }
-        },
-        onWorkflowComplete: async (workflowId: string, workflowResult: any) => {
-            runningWorkflows.value.delete(workflowId)
-            try {
-                if (backend.isDesktop()) {
-                    const { emit } = await import('@tauri-apps/api/event')
-                    void emit('workflow:execute:complete', { id: workflowId, success: !!workflowResult.success, logs: workflowResult.logs })
-                }
-            } catch (e) {
-                logger.add(LogType.ERR, '发射 workflow:execute:complete 事件失败', e)
             }
         }
     })

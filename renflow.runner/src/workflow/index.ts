@@ -28,7 +28,7 @@ export async function runWorkflow(
     data: any,
     configs?: { minDelay?: number; timeout?: number, bot?: BaseBotAdapter },
     callbacks?: {
-        onNodeStart?: (nodeId: string) => void | Promise<void>
+        onNodeStart?: (nodeId: string, nodeType: string, input: any) => void | Promise<void>
         onNodeComplete?: (nodeId: string) => void | Promise<void>
         onNodeError?: (nodeId: string, error: any) => void | Promise<void>
         onWorkflowComplete?: (result: WorkflowExecutionResult) => void | Promise<void>
@@ -60,8 +60,8 @@ export async function runWorkflow(
             ...(configs?.bot ? { bot: configs.bot } : {})
         },
         callback: {
-            onNodeStart: async (nodeId: string) => {
-                callbacks?.onNodeStart && await callbacks.onNodeStart(nodeId)
+            onNodeStart: async (nodeId: string, nodeType: string, input: any) => {
+                callbacks?.onNodeStart && await callbacks.onNodeStart(nodeId, nodeType, input)
             },
             onNodeComplete: async (nodeId: string) => {
                 callbacks?.onNodeComplete && await callbacks.onNodeComplete(nodeId)
@@ -94,7 +94,7 @@ export async function runWorkflowByTrigger(
          * @returns 是否允许执行该节点
          */
         onWorkflowStart?: (workflowId: string) => boolean | Promise<boolean>
-        onNodeStart?: (workflowId: string, nodeId: string) => void | Promise<void>
+        onNodeStart?: (workflowId: string, nodeId: string, input: any) => void | Promise<void>
         onNodeComplete?: (workflowId: string, nodeId: string) => void | Promise<void>
         onNodeError?: (workflowId: string, nodeId: string, error: any) => void | Promise<void>
         onWorkflowComplete?: (workflowId: string, result: WorkflowExecutionResult) => void | Promise<void>
@@ -118,8 +118,8 @@ export async function runWorkflowByTrigger(
             }
         }
         runWorkflow(workflow, triggerData, configs, {
-            onNodeStart(nodeId) {
-                return callbacks?.onNodeStart ? callbacks.onNodeStart(workflow.id, nodeId) : undefined
+            onNodeStart(nodeId, nodeType, input) {
+                return callbacks?.onNodeStart ? callbacks.onNodeStart(workflow.id, nodeId, input) : undefined
             },
             onNodeComplete(nodeId) {
                 return callbacks?.onNodeComplete ? callbacks.onNodeComplete(workflow.id, nodeId) : undefined

@@ -57,7 +57,7 @@ export interface WorkflowExecutionResult {
  */
 export interface ExecutionCallback {
     /** 节点开始执行 */
-    onNodeStart?: (nodeId: string, nodeType: string) => void | Promise<void>
+    onNodeStart?: (nodeId: string, nodeType: string, input: any) => void | Promise<void>
     /** 节点执行完成 */
     onNodeComplete?: (nodeId: string, result: NodeExecutionResult) => void | Promise<void>
     /** 节点执行失败 */
@@ -227,7 +227,7 @@ export class WorkflowEngine {
         this.logger.info(`执行节点: ${nodeId} (${node.type})`)
 
         // 触发节点开始回调
-        await options.callback?.onNodeStart?.(nodeId, node.type)
+        await options.callback?.onNodeStart?.(nodeId, node.type, input)
 
         // 创建节点上下文
         const nodeContext: NodeContext = {

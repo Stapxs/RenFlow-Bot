@@ -105,10 +105,7 @@ export class SendMessageNode extends BaseNode {
         }[]
 
         for (const item of rawVal) {
-            // 对 item.data 中的 {nodeid.value} 进行替换
-            if (typeof item.data === 'string' && item.data.includes('{') && item.data.includes('}')) {
-                item.data = fillTextTemplate(item.data, input, context)
-            }
+            item.data = fillTextTemplate(item.data, input, context, true)
 
             switch (item.value) {
                 case 'text':

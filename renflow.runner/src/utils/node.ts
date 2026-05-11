@@ -21,6 +21,7 @@ export function getGlobal(context: NodeContext, key: string, defaultValue?: any)
  * @param str 模板字符串
  * @param input 输入数据
  * @param context 节点执行上下文
+ * @param throwError 当占位符无法解析时是否抛出错误
  * @returns
  */
 export function fillTextTemplate(

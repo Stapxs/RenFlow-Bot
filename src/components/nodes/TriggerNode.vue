@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { Position, Handle, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
-import type { NodeParam } from 'renflow.runner'
+import type { NodeParam } from 'renflow-runner'
 
 import NodeSettingsPanel from '../NodeSettingsPanel.vue'
 

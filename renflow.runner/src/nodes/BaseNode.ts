@@ -3,6 +3,7 @@ import type { NodeMetadata, NodeContext, NodeExecutionResult } from './types.js'
 
 /**
  * 节点基类
+ * 所有节点均应继承此类
  */
 export abstract class BaseNode {
     /** 节点元数据 */

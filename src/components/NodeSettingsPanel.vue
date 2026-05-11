@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { NodeParam } from 'renflow.runner'
-import { ref, computed, markRaw, defineAsyncComponent } from 'vue'
+import type { NodeParam } from 'renflow-runner'
+import { ref, computed, markRaw, defineAsyncComponent, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import ConditionParam from './ConditionParam.vue'
 import SettingsLoading from './setting-pan/SettingsLoading.vue'
@@ -25,6 +25,16 @@ const { getIncomers, findNode } = useVueFlow()
 
 // 本地参数值
 const localValues = ref<Record<string, any>>({ ...props.modelValue })
+
+const syncLocalValues = () => {
+    const nextValues = JSON.parse(JSON.stringify(props.modelValue || {}))
+    for (const param of props.params || []) {
+        if (param.defaultValue !== undefined && nextValues[param.key] === undefined) {
+            nextValues[param.key] = param.defaultValue
+        }
+    }
+    localValues.value = nextValues
+}
 
 // tip 显示状态（支持点击切换）
 const visibleTips = ref<Record<string, boolean>>({})
@@ -89,12 +99,13 @@ const availableParameters = computed(() => {
     return parameters
 })
 
-// 初始化参数默认值
-props.params.forEach(param => {
-    if (param.defaultValue !== undefined && localValues.value[param.key] === undefined) {
-        localValues.value[param.key] = param.defaultValue
-    }
-})
+watch(
+    () => [props.modelValue, props.params, props.panShow],
+    () => {
+        syncLocalValues()
+    },
+    { deep: true, immediate: true }
+)
 
 // 更新参数值
 const updateParam = (key: string, value: any) => {

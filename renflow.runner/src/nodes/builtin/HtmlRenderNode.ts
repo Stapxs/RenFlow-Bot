@@ -1,5 +1,4 @@
-import { getGlobal } from '../../utils/node.js'
-import { getValue } from '../../utils/util.js'
+import { fillTextTemplate, } from '../../utils/node.js'
 import { BaseNode } from '../BaseNode.js'
 import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js'
 
@@ -33,28 +32,16 @@ export class HtmlRenderNode extends BaseNode {
     }
 
     async execute(
-        _input: any,
+        input: any,
         params: Record<string, any>,
         context: NodeContext
     ): Promise<NodeExecutionResult> {
+        const resourceWaitTimeoutMs = 10000
         const tpl = params.template ?? params?.template ?? this.metadata.params[0].defaultValue
 
         let html = String(tpl || '')
 
-        if (html.includes('{') && html.includes('}')) {
-            const regex = /\{([^}]+)\}/g
-            let match
-            while ((match = regex.exec(html)) !== null) {
-                const placeholder = match[0]
-                const path = match[1].split('.')
-                const nodeId = path[0]
-                const nodeData = getGlobal(context, nodeId)
-                const value = getValue(nodeData, path.slice(1).join('.'))
-                if (value !== undefined) {
-                    html = html.replace(placeholder, String(value))
-                }
-            }
-        }
+        html = fillTextTemplate(html, input, context)
 
         const g = (globalThis as any)
         const isBrowser = !!(g && g.document && g.window)
@@ -67,7 +54,12 @@ export class HtmlRenderNode extends BaseNode {
             container.style.width = 'fit-content'
             container.innerHTML = htmlStr
             document.body.appendChild(container)
-            const canvas = await html2canvas(container, { backgroundColor: null })
+            await this.waitForContainerResources(container, g, resourceWaitTimeoutMs)
+            const canvas = await html2canvas(container, {
+                backgroundColor: null,
+                useCORS: true,
+                imageTimeout: resourceWaitTimeoutMs
+            })
             const dataUrl = canvas.toDataURL('image/png')
             document.body.removeChild(container)
             return dataUrl.replace('data:image/png;base64,', 'base64://')
@@ -101,6 +93,62 @@ export class HtmlRenderNode extends BaseNode {
                 const msg = (err instanceof Error ? err.message : String(err)) || ''
                 return { success: false, error: `服务器端渲染失败（请确保已安装 puppeteer）：${msg}` }
             }
+        }
+    }
+
+    private async waitForContainerResources(container: any, g: any, timeoutMs: number): Promise<void> {
+        const pending: Promise<void>[] = []
+
+        if (g.document?.fonts?.ready) {
+            pending.push(g.document.fonts.ready.then(() => undefined).catch(() => undefined))
+        }
+
+        const images = Array.from(container.querySelectorAll('img')) as any[]
+        for (const img of images) {
+            this.prepareImageForCanvas(img, g)
+
+            if (img.complete && img.naturalWidth > 0) {
+                continue
+            }
+
+            pending.push(new Promise((resolve) => {
+                const done = () => {
+                    img.removeEventListener('load', done)
+                    img.removeEventListener('error', done)
+                    resolve()
+                }
+
+                img.addEventListener('load', done, { once: true })
+                img.addEventListener('error', done, { once: true })
+            }))
+        }
+
+        if (pending.length > 0) {
+            await Promise.race([
+                Promise.all(pending).then(() => undefined),
+                new Promise<void>((resolve) => {
+                    setTimeout(resolve, timeoutMs)
+                })
+            ])
+        }
+    }
+
+    private prepareImageForCanvas(img: any, g: any): void {
+        const src = typeof img?.getAttribute === 'function' ? img.getAttribute('src') || '' : ''
+        if (!src || src.startsWith('data:') || src.startsWith('blob:')) {
+            return
+        }
+
+        try {
+            const url = new URL(src, g.window?.location?.href)
+            if (url.origin !== g.window?.location?.origin && !img.crossOrigin) {
+                img.crossOrigin = 'anonymous'
+                if (img.src !== url.href) {
+                    img.src = url.href
+                }
+            }
+        } catch {
+            // 忽略非法 URL，交给 html2canvas 自行处理
         }
     }
 }

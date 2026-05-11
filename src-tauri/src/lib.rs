@@ -121,6 +121,7 @@ pub fn run() {
             commands::sys::sys_run_command,
             commands::sys::sys_get_final_redirect_url,
             commands::sys::sys_get_html,
+            commands::sys::get_system_info,
             commands::sys::sys_get_api,
             commands::sys::sys_download,
             commands::sys::sys_set_store_value,

@@ -1,5 +1,6 @@
 import { Expose, Type, Transform } from 'class-transformer'
-import { RenApiData, RenApiParamsMessage, RenMessage, RenMessageDataType, RenMessageImage, RenMessageReply, RenMessageText, SenderDTO } from '../msgTypes.js'
+import { RenApiParamsMessage, RenMessage, RenMessageDataType, RenMessageImage, RenMessageReply, RenMessageText, SenderDTO } from '../msgTypes.js'
+import { OneBotAccountProfile, OneBotApiAction, OneBotApiResponse, OneBotLoginInfo, OneBotStrangerInfo } from './baseTypes.js'
 
 
 class NcRenMessageImage extends RenMessageImage {
@@ -117,25 +118,31 @@ export class NcRenApiParamsMessage extends RenApiParamsMessage {
     declare groupId?: number
 }
 
-export class NcRenApiData extends RenApiData {
-    @Expose() action!: string
-    @Expose() params!: NcRenApiParamsType
-    @Expose() echo?: string
-
+export class NcRenApiData extends OneBotApiAction {
     constructor(action: string, params: NcRenApiParamsType, echo?: string) {
-        super()
-        this.action = action
-        this.params = params
-        if (echo) this.echo = echo
+        super(action, params, echo)
     }
 }
 
-export class NcRenApiResponse {
-    @Expose() data?: any
-    @Expose() echo?: string
-    @Expose() message?: string
-    @Expose() retcode!: number
-    @Expose() status!: string
-    @Expose() wording?: string
+export class NcRenApiResponse extends OneBotApiResponse {}
+
+// 登录 / 账号信息 ==================================================
+
+export class NcLoginInfo extends OneBotLoginInfo {}
+
+export class NcStrangerInfo extends OneBotStrangerInfo {}
+
+export class NcAccountProfile extends OneBotAccountProfile {
+    @Type(() => NcLoginInfo)
+    declare loginInfo?: NcLoginInfo
+
+    @Type(() => NcStrangerInfo)
+    declare strangerInfo?: NcStrangerInfo
+
+    static override from(login: NcLoginInfo, stranger?: NcStrangerInfo): NcAccountProfile {
+        const profile = new NcAccountProfile()
+        profile.mergeFrom(login, stranger)
+        return profile
+    }
 }
 

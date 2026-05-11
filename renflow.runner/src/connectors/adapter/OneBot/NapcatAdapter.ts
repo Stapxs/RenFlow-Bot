@@ -6,6 +6,7 @@ import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { NapcatRenMessage, NcRenApiData, NcRenApiParamsMessage } from './napcatMsgTypes.js'
 import { Logger } from '../../../utils/logger.js'
 import type { RenApiData } from '../msgTypes.js'
+import { SimpleCache, createCache } from '../../../utils/cache.js'
 
 
 /**
@@ -19,11 +20,18 @@ export class NapcatAdapter extends BaseBotAdapter {
     private pendingApiResponses: Map<string, { resolve: (v: any) => void, reject: (e: any) => void, timer?: any }> = new Map()
     private reconnecting = false
     private lastActivity = 0
+    private apiCache: SimpleCache<any>
 
     protected declare options: NapcatAdapterOptions
 
     constructor(id: string, opts?: NapcatAdapterOptions) {
         super(id, opts)
+        // 初始化 API 缓存，默认 5 分钟 TTL，最多 500 条
+        this.apiCache = createCache(`NapcatAdapter-${id}`, {
+            maxSize: opts?.cacheMaxSize ?? 500,
+            defaultTTL: opts?.cacheTTL ?? 300000, // 5分钟
+            debug: opts?.cacheDebug ?? false
+        })
     }
 
     async connect(): Promise<void> {
@@ -255,12 +263,13 @@ export class NapcatAdapter extends BaseBotAdapter {
     public async callApiAsync(message: RenApiData): Promise<any> {
         if (!this.ws || !this.connected) throw new Error('NapcatAdapter: WebSocket is not connected')
         const jsonData = instanceToPlain(message as any)
-    await this.sendRaw(JSON.stringify(jsonData))
+        await this.sendRaw(JSON.stringify(jsonData))
         return
     }
 
     // 同步调用：接收一个 RenApiData 对象，通过 echo 字段等待服务端响应
-    public callApiSync(message: RenApiData): any {
+    // 支持缓存选项：useCache 启用缓存，cacheTTL 自定义缓存时长
+    public callApiSync(message: RenApiData, options?: { useCache?: boolean; cacheTTL?: number }): any {
         if (!this.ws || !this.connected) throw new Error('NapcatAdapter: WebSocket is not connected')
 
         // 将 message 转为 plain 对象，并确保 echo 存在
@@ -271,6 +280,21 @@ export class NapcatAdapter extends BaseBotAdapter {
             plain.echo = echo
         }
 
+        // 检查是否启用缓存
+        const useCache = options?.useCache ?? false
+        const cacheTTL = options?.cacheTTL
+
+        // 生成缓存键（基于 action 和 params，排除 echo）
+        const cacheKey = useCache ? this.generateCacheKey(plain) : null
+
+        // 尝试从缓存获取
+        if (cacheKey && useCache) {
+            const cached = this.apiCache.get(cacheKey)
+            if (cached !== undefined) {
+                return Promise.resolve(cached)
+            }
+        }
+
         const payload = JSON.stringify(plain)
 
         return new Promise((resolve, reject) => {
@@ -279,7 +303,16 @@ export class NapcatAdapter extends BaseBotAdapter {
                 this.pendingApiResponses.delete(echo)
                 reject(new Error(`callApiSync timeout waiting for echo=${echo}`))
             }, timeout)
-            this.pendingApiResponses.set(echo, { resolve, reject, timer })
+
+            // 包装 resolve 以支持缓存写入
+            const wrappedResolve = (data: any) => {
+                if (cacheKey && useCache && data) {
+                    this.apiCache.set(cacheKey, data, cacheTTL)
+                }
+                resolve(data)
+            }
+
+            this.pendingApiResponses.set(echo, { resolve: wrappedResolve, reject, timer })
 
             // 发送
             try {
@@ -322,6 +355,39 @@ export class NapcatAdapter extends BaseBotAdapter {
         // 逆向生成 json
         const jsonData = instanceToPlain<NcRenApiData>(action)
         await this.sendRaw(JSON.stringify(jsonData))
+    }
+
+    // 缓存辅助方法 ==================================================
+
+    /**
+     * 生成缓存键（基于 API action 和 params）
+     */
+    private generateCacheKey(plain: any): string {
+        const { action, params } = plain
+        // 使用 action + params 的 JSON 作为缓存键
+        const key = JSON.stringify({ action, params })
+        return key
+    }
+
+    /**
+     * 获取缓存统计信息
+     */
+    public getCacheStats() {
+        return this.apiCache.getStats()
+    }
+
+    /**
+     * 清空 API 缓存
+     */
+    public clearCache() {
+        this.apiCache.clear()
+    }
+
+    /**
+     * 清理过期缓存
+     */
+    public cleanExpiredCache() {
+        return this.apiCache.cleanExpired()
     }
 }
 

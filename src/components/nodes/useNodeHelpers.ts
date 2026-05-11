@@ -1,7 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
-import type { NodeParam } from 'renflow.runner'
+import type { NodeParam } from 'renflow-runner'
 
 export function useNodeParams(props: NodeProps) {
     const { updateNode } = useVueFlow()

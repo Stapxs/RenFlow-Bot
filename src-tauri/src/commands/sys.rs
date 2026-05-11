@@ -15,7 +15,7 @@ use zip::write::FileOptions;
 
 #[command]
 pub async fn sys_front_loaded(
-    app: AppHandle,
+    _app: AppHandle,
     notifications: State<'_, Arc<dyn NotificationManager>>) -> Result<String, String> {
     match notifications.first_time_ask_for_notification_permission().await {
         Err(err) => {
@@ -138,6 +138,99 @@ pub async fn sys_get_api(data: String) -> Result<Value, String> {
     } else {
         Err("Response is not JSON".to_string())
     }
+}
+
+#[derive(Serialize)]
+pub struct FullSystemInfo {
+    pub platform: String,
+    pub arch: String,
+    pub release: String,
+    pub uptime: u64,
+    pub cpu_count: usize,
+    pub cpu_model: String,
+    pub total_memory: u64,
+    pub free_memory: u64,
+    pub hostname: String,
+    pub network_interfaces: serde_json::Value,
+}
+
+#[command]
+pub fn get_system_info() -> Result<FullSystemInfo, String> {
+    use sysinfo::System;
+
+    // 使用 sys-info + num_cpus + get_if_addrs 获取跨平台信息，尽量与 Node 的 os 返回字段保持一致
+    let platform = if cfg!(windows) { "win32".to_string() } else if cfg!(target_os = "macos") { "darwin".to_string() } else { "linux".to_string() };
+    let arch = std::env::consts::ARCH.to_string();
+
+    // release：复用已有逻辑
+    let release = match sys_get_release() {
+        Some(r) => r.release,
+        None => String::new(),
+    };
+
+    // uptime（秒）- 使用 sysinfo 获取
+    let uptime = System::uptime();
+
+    // CPU
+    let cpu_count = num_cpus::get();
+    let cpu_model = {
+        let mut sys = System::new();
+        sys.refresh_cpu();
+        if let Some(cpu) = sys.cpus().first() {
+            cpu.brand().to_string()
+        } else {
+            String::new()
+        }
+    };
+
+    // 内存（使用 sysinfo，返回字节）
+    let (total_memory, free_memory) = {
+        let mut sys = System::new();
+        sys.refresh_memory();
+        (sys.total_memory(), sys.available_memory())
+    };
+
+    // 主机名
+    let hostname = match sys_info::hostname() {
+        Ok(h) => h,
+        Err(_) => String::new(),
+    };
+
+    // 网络接口：使用 get_if_addrs 获取地址并序列化为 JSON 对象 { ifname: [{ address, family, internal }] }
+    let mut nets = serde_json::Map::new();
+    if let Ok(addrs) = get_if_addrs::get_if_addrs() {
+        for ifa in addrs {
+            let name = ifa.name;
+            let entry = nets.entry(name.clone()).or_insert_with(|| serde_json::Value::Array(vec![]));
+            let (addr_str, family, is_loopback) = match &ifa.addr {
+                get_if_addrs::IfAddr::V4(v4) => (v4.ip.to_string(), "IPv4", v4.ip.is_loopback()),
+                get_if_addrs::IfAddr::V6(v6) => (v6.ip.to_string(), "IPv6", v6.ip.is_loopback()),
+            };
+            let obj = serde_json::json!({
+                "address": addr_str,
+                "family": family,
+                "internal": is_loopback,
+            });
+            if let serde_json::Value::Array(arr) = entry {
+                arr.push(obj);
+            }
+        }
+    }
+
+    let network_interfaces = serde_json::Value::Object(nets);
+
+    Ok(FullSystemInfo {
+        platform,
+        arch,
+        release,
+        uptime,
+        cpu_count,
+        cpu_model,
+        total_memory,
+        free_memory,
+        hostname,
+        network_interfaces,
+    })
 }
 
 #[command]
@@ -416,7 +509,7 @@ pub struct ExportPayload { path: Option<String>, bots: Vec<serde_json::Value>, w
 
 #[command]
 pub async fn sys_export_workspace(data: ExportPayload) -> Result<(), String> {
-    let mut target: PathBuf = match data.path {
+    let target: PathBuf = match data.path {
         Some(ref p) if !p.is_empty() => {
             let mut t = PathBuf::from(p);
             if t.extension().is_none() { t.set_extension("rfw"); }

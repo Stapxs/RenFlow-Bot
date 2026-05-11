@@ -65,7 +65,16 @@ watch(() => props.data?.params, (newParams) => {
         return
     }
     // 深拷贝以断开引用，并保持响应性
-    paramValues.value = JSON.parse(JSON.stringify(newParams))
+    const copied = JSON.parse(JSON.stringify(newParams))
+    // 补充 defaultValue：如果 copied 中某个 key 不存在值，且 metadata.params 中定义了 defaultValue，则使用它
+    if (props.data?.metadata?.params) {
+        for (const paramDef of props.data.metadata.params) {
+            if (paramDef.defaultValue !== undefined && copied[paramDef.key] === undefined) {
+                copied[paramDef.key] = paramDef.defaultValue
+            }
+        }
+    }
+    paramValues.value = copied
 }, { deep: true, immediate: true })
 
 // 使用通用删除逻辑
@@ -83,7 +92,8 @@ defineEmits(['updateNodeInternals'])
                 <font-awesome-icon :icon="['fas', data.metadata.icon || 'fa-cube']" />
                 <span class="node-label">{{ data.label }}</span>
             </div>
-            <button v-if="shouldShowSettings" class="title-btn" title="节点设置" @click.stop="openSettings">
+            <button v-if="shouldShowSettings" class="title-btn" title="节点设置"
+                @click.stop="openSettings">
                 <font-awesome-icon :icon="['fas', 'cog']" />
             </button>
             <button class="title-btn" title="删除节点" @click.stop="deleteNode">
@@ -188,6 +198,7 @@ defineEmits(['updateNodeInternals'])
 .vue-flow__node-base {
     box-shadow: 0 0 5px var(--color-shader);
     min-height: unset;
+    min-width: 170px;
     font-size: 0.8rem;
     padding: 15px 20px;
 }

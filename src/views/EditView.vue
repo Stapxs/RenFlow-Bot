@@ -18,6 +18,10 @@
                 <font-awesome-icon :icon="['fas', 'fa-rotate-right']" />
                 重做
             </button>
+            <button class="toolbar-btn" @click="openActivityPreview" title="预览运行活动">
+                <font-awesome-icon :icon="['fas', 'fa-chart-line']" />
+                预览活动
+            </button>
             <button class="toolbar-btn execute-btn" @click="executeWorkflow">
                 <font-awesome-icon :icon="['fas', workflowEnabled ? 'fa-toggle-on' : 'fa-toggle-off']" />
                 {{ workflowEnabled ? '禁用工作流' : '启用工作流' }}
@@ -164,13 +168,16 @@
                 </div>
             </BcTab>
         </div>
+
+        <!-- 活动预览弹窗 -->
+        <ActivityPreviewDialog ref="activityPreviewRef" v-model:show="showActivityPreview" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { LogLevel, init, nodeManager as runnerNodeManager, BaseRenMessage } from 'renflow.runner'
+import { LogLevel, init, nodeManager as runnerNodeManager, BaseRenMessage } from 'renflow-runner'
 
-import { MergeNode, type NodeMetadata } from 'renflow.runner'
+import { MergeNode, type NodeMetadata } from 'renflow-runner'
 import type { Node, Edge } from '@vue-flow/core'
 
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
@@ -188,6 +195,7 @@ import TriggerNode from '@app/components/nodes/TriggerNode.vue'
 import NoteNode from '@app/components/nodes/NoteNode.vue'
 import IfElseNode from '@app/components/nodes/IfElseNode.vue'
 import MergeNodeVue from '@app/components/nodes/MergeNode.vue'
+import ActivityPreviewDialog from '@app/components/ActivityPreviewDialog.vue'
 
 import { WorkflowStorage } from '@app/functions/workflow'
 import { backend } from '@app/functions/backend'
@@ -227,8 +235,14 @@ const workflowInfo = ref<any>({})
 const localFlow = ref<any>({})
 const editingFlow = ref<boolean>(false)
 const workflowEnabled = ref<boolean>(false)
+const showActivityPreview = ref<boolean>(false)
+const activityPreviewRef = ref<any>(null)
 
-// 初始化 renflow.runner（集中初始化入口）
+function openActivityPreview() {
+    showActivityPreview.value = true
+}
+
+// 初始化 renflow-runner（集中初始化入口）
 init(LogLevel.DEBUG, {
     debug: (_: string, ...args: any[]) => {
         logger.debug(args[0])
@@ -526,6 +540,17 @@ onMounted(async () => {
                 } else {
                     highlightNode(nodeId, true)
                 }
+
+                // 记录到活动预览
+                if (activityPreviewRef.value && node) {
+                    activityPreviewRef.value.addActivity(
+                        nodeId,
+                        node.data?.label || node.data?.metadata?.name || nodeId,
+                        node.data?.metadata?.icon || 'cube',
+                        payload.params || node.data?.params || {},
+                        payload.input
+                    )
+                }
                 // try {
                 //     const node = (nodes.value as any[]).find((n: any) => n.id === nodeId) as any
                 //     if (node && node.position) {
@@ -549,6 +574,11 @@ onMounted(async () => {
                 } else {
                     highlightNode(nodeId, false)
                 }
+
+                // 更新活动预览
+                if (activityPreviewRef.value) {
+                    activityPreviewRef.value.updateActivity(nodeId, 'completed', payload)
+                }
             })
 
             // 监听节点错误
@@ -558,13 +588,28 @@ onMounted(async () => {
                 const nodeId = payload.nodeId
                 highlightNode(nodeId, false)
                 toast.error(`节点执行错误 > ${payload.error || ''}`)
+
+                // 更新活动预览
+                if (activityPreviewRef.value) {
+                    activityPreviewRef.value.updateActivity(nodeId, 'error', payload)
+                }
             })
 
-            // 监听执行开始/完成
+            // 监听执行开始
             backend.addListener('workflow:execute:start', (evt: any) => {
                 const payload = evt?.payload || {}
                 if (payload.id !== workflowInfo.value.id) return
                 toast.info('工作流开始执行')
+                if (activityPreviewRef.value) {
+                    activityPreviewRef.value.addTimestamp()
+                }
+            })
+
+            // 监听执行完成
+            backend.addListener('workflow:execute:complete', (evt: any) => {
+                const payload = evt?.payload || {}
+                if (payload.id !== workflowInfo.value.id) return
+                toast.success('工作流执行完成')
             })
         }
     } catch (e) {
@@ -1345,6 +1390,7 @@ function onEdgeDoubleClick({ edge }: { edge: Edge }) {
     background: rgba(var(--color-card-rgb), 0.5);
     box-shadow: 0 0 5px var(--color-shader);
     backdrop-filter: blur(10px);
+    overflow: hidden;
     height: calc(100vh - 60px);
     position: absolute;
     width: 250px;
@@ -1391,7 +1437,14 @@ function onEdgeDoubleClick({ edge }: { edge: Edge }) {
     border: none;
 }
 
+.node-list-body::-webkit-scrollbar,
+.flow-info::-webkit-scrollbar {
+    display: none;
+}
+
 .node-list-body {
+    height: calc(100vh - 140px);
+    overflow-y: scroll;
     margin-top: 15px;
 }
 .node-list-body > div {
@@ -1458,6 +1511,10 @@ function onEdgeDoubleClick({ edge }: { edge: Edge }) {
     padding-bottom: 6px;
 }
 
+.flow-info {
+    height: calc(100vh - 140px);
+    overflow-y: scroll;
+}
 .flow-row {
     display: flex;
     flex-wrap: wrap;
@@ -1535,5 +1592,12 @@ function onEdgeDoubleClick({ edge }: { edge: Edge }) {
 .node-list .tab-main > div:first-child {
     background: transparent;
     box-shadow: unset;
+}
+.node-list .tab-body {
+    height: calc(100vh - 90px);
+    overflow: hidden;
+}
+.node-list .tab-body > div {
+    height: 100%;
 }
 </style>

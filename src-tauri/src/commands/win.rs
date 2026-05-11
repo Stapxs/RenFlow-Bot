@@ -1,4 +1,4 @@
-use tauri::{command, AppHandle, Manager, WebviewWindow};
+use tauri::{command, AppHandle, Manager};
 use log::{debug, error, info};
 use serde::Deserialize;
 
@@ -59,11 +59,11 @@ pub fn win_create_window(app_handle: AppHandle, options: CreateWindowOptions) ->
             .decorations(false);
     }
 
-    let window = window_builder.build().map_err(|e| e.to_string())?;
+    let _window = window_builder.build().map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "windows")]
     {
-        window_vibrancy::apply_mica(&window, None);
+        window_vibrancy::apply_mica(&_window, None);
     }
 
     info!("窗口创建成功: {}", options.label);

@@ -47,15 +47,8 @@ async function main() {
                         const content = await fs.readFile(resolved, { encoding: 'utf-8' })
                         const json = JSON.parse(content)
 
-                        let workflowExecution: any = null
-                        if (Array.isArray(json.nodes) && Array.isArray(json.edges)) {
-                            const converter = new WorkflowConverter()
-                            workflowExecution = converter.convert(json)
-                        } else if (json && typeof json.nodes === 'object' && json.entryNode !== undefined) {
-                            workflowExecution = json
-                        } else {
-                            throw new Error('无法识别的工作流 JSON 格式')
-                        }
+                        const converter = new WorkflowConverter()
+                        const workflowExecution = converter.convertAuto(json)
 
                         const engine = new WorkflowEngine()
                         const result = await engine.execute(workflowExecution, null)
@@ -84,12 +77,8 @@ async function main() {
                                 try {
                                     const content = e.getData().toString('utf-8')
                                     const json = JSON.parse(content)
-                                    if (Array.isArray(json.nodes) && Array.isArray(json.edges)) {
-                                        const converter = new WorkflowConverter()
-                                        workflows.push(converter.convert(json))
-                                    } else if (json && typeof json.nodes === 'object' && json.entryNode !== undefined) {
-                                        workflows.push(json)
-                                    }
+                                    const converter = new WorkflowConverter()
+                                    workflows.push(converter.convertAuto(json))
                                 } catch (err) {
                                     logger.warn(`解析工作流失败: ${e.entryName} > ${String(err)}`)
                                 }
@@ -247,7 +236,7 @@ export { Logger, LogLevel } from './utils/logger.js'
 export * from './nodes/index.js'
 export * from './workflow/index.js'
 export * from './connectors/adapter/msgTypes.js'
-export { connectorManager } from './connectors/index.js'
+export { connectorManager, BaseBotAdapter } from './connectors/index.js'
 
 /**
  * 全局初始化入口。

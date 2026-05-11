@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { connectorManager } from 'renflow.runner'
+import { connectorManager } from 'renflow-runner'
 import { reactive, watch, defineProps, defineEmits, toRef } from 'vue'
 
 const props = defineProps<{ modelValue: boolean }>()
