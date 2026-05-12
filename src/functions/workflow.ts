@@ -21,7 +21,10 @@ export interface WorkflowData {
     triggerName: string             // 触发器名称
     triggerLabel: string            // 触发器标签
     /** 启动参数：在执行或启用工作流时传入的参数 */
-    startParams?: { [key: string]: any }
+    startParams?: {
+        timeout?: number
+        [key: string]: any
+    }
     /** 是否启用（用于切换执行/启用状态） */
     enabled?: boolean
     nodes: Node[]                   // 节点列表
@@ -41,7 +44,10 @@ export interface WorkflowListItem {
     triggerTypeLabel: string
     triggerName: string
     triggerLabel: string
-    startParams?: { [key: string]: any }
+    startParams?: {
+        timeout?: number
+        [key: string]: any
+    }
     enabled?: boolean
     createdAt: number
     updatedAt: number

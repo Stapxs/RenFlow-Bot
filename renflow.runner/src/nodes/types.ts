@@ -108,6 +108,7 @@ export interface NodeContext {
         error: (...args: any[]) => void
         warn: (...args: any[]) => void
     }
+    agentCallbacks?: Record<string, (...args: any[]) => void>
 }
 
 /**

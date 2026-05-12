@@ -16,6 +16,7 @@ interface WorkflowConfig {
     customTriggerName?: string
     name: string
     description: string
+    timeout: number
 }
 
 // 表单数据
@@ -24,7 +25,8 @@ const formData = ref<WorkflowConfig>({
     triggerLabel: '新消息 (message)',
     customTriggerName: '',
     name: '',
-    description: ''
+    description: '',
+    timeout: 60000
 })
 
 // 触发名称选项（合并事件与通知类型）
@@ -69,7 +71,8 @@ const create = () => {
         triggerLabel: formData.value.triggerLabel,
         customTriggerName: formData.value.customTriggerName,
         name: formData.value.name.trim(),
-        description: formData.value.description.trim()
+        description: formData.value.description.trim(),
+        timeout: Math.max(1000, Number(formData.value.timeout) || 60000)
     }
 
     emit('create', workflow)
@@ -81,7 +84,8 @@ const create = () => {
         triggerLabel: '新消息 (message)',
         customTriggerName: '',
         name: '',
-        description: ''
+        description: '',
+        timeout: 60000
     }
 }
 </script>
@@ -134,6 +138,15 @@ const create = () => {
                             v-model="formData.description"
                             placeholder="请输入工作流备注(可选)"
                             rows="3" />
+                    </div>
+
+                    <div class="form-item">
+                        <label>执行超时(ms)</label>
+                        <input v-model.number="formData.timeout"
+                            type="number"
+                            min="1000"
+                            step="1000"
+                            placeholder="请输入工作流执行超时">
                     </div>
                 </div>
 
@@ -239,6 +252,7 @@ const create = () => {
 }
 
 .form-item input[type="text"],
+.form-item input[type="number"],
 .form-item textarea,
 .form-item select {
     width: 100%;

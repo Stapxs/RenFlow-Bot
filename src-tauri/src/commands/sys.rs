@@ -140,6 +140,7 @@ pub async fn sys_get_api(data: String) -> Result<Value, String> {
     }
 }
 
+
 #[derive(Serialize)]
 pub struct FullSystemInfo {
     pub platform: String,

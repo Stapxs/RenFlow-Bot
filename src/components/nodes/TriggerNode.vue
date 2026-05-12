@@ -148,7 +148,7 @@ function updateSettings(newValues: Record<string, any>) {
     border-radius: 12px;
     padding: 12px 20px;
     box-shadow: 0 0 5px var(--color-shader);
-    min-width: 150px;
+    min-width: 200px;
     text-align: center;
 }
 

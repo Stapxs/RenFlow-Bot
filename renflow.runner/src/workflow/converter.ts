@@ -21,6 +21,14 @@ export class WorkflowConverter {
     }
 
     /**
+     * 兼容入口：当前自动识别逻辑与标准 Vue Flow 转换一致。
+     * 后续如果存在多种工作流序列化格式，可在这里扩展分流。
+     */
+    convertAuto(workflow: VueFlowWorkflow): WorkflowExecution {
+        return this.convert(workflow)
+    }
+
+    /**
      * 将 Vue Flow 工作流转换为执行数据
      * @param vueFlowWorkflow Vue Flow 工作流数据
      * @returns 执行数据
@@ -78,7 +86,8 @@ export class WorkflowConverter {
             type: workflow.triggerType,
             typeLabel: workflow.triggerTypeLabel,
             name: workflow.triggerName,
-            label: workflow.triggerLabel
+            label: workflow.triggerLabel,
+            params: { ...(workflow.startParams || {}) }
         }
     }
 

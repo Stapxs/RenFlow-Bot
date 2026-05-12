@@ -26,7 +26,7 @@ export * from './engine.js'
 export async function runWorkflow(
     executionData: WorkflowExecution,
     data: any,
-    configs?: { minDelay?: number; timeout?: number, bot?: BaseBotAdapter },
+    configs?: { minDelay?: number; timeout?: number, bot?: BaseBotAdapter, proxyPort?: number },
     callbacks?: {
         onNodeStart?: (nodeId: string, nodeType: string, input: any) => void | Promise<void>
         onNodeComplete?: (nodeId: string) => void | Promise<void>
@@ -53,11 +53,13 @@ export async function runWorkflow(
     }
 
     const engine = new WorkflowEngine()
+    const workflowTimeout = resolveWorkflowTimeout(executionData, configs?.timeout)
     await engine.execute(executionData, data, {
         minDelay: configs?.minDelay || 1000,
-        timeout: configs?.timeout || 60000,
+        timeout: workflowTimeout,
         initialGlobals: {
-            ...(configs?.bot ? { bot: configs.bot } : {})
+            ...(configs?.bot ? { bot: configs.bot } : {}),
+            ...(configs?.proxyPort ? { __tauriProxyPort: configs.proxyPort } : {})
         },
         callback: {
             onNodeStart: async (nodeId: string, nodeType: string, input: any) => {
@@ -76,6 +78,15 @@ export async function runWorkflow(
     })
 }
 
+function resolveWorkflowTimeout(executionData: WorkflowExecution, fallback?: number): number {
+    const triggerParams = executionData.trigger?.params
+    const timeout = Number(triggerParams?.timeout)
+    if (Number.isFinite(timeout) && timeout >= 1000) {
+        return timeout
+    }
+    return fallback || 60000
+}
+
 /**
  * 运行一组工作流（验证触发器筛选）
  * @param executionData 工作流执行数据数组
@@ -86,7 +97,7 @@ export async function runWorkflow(
 export async function runWorkflowByTrigger(
     executionData: WorkflowExecution[],
     triggerData: any,
-    configs?: { minDelay?: number; timeout?: number, bot?: BaseBotAdapter },
+    configs?: { minDelay?: number; timeout?: number, bot?: BaseBotAdapter, proxyPort?: number },
     callbacks?: {
         /**
          * 触发前检查，你可以通过返回 false 来阻止工作流执行

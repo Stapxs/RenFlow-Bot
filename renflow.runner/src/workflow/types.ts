@@ -110,6 +110,10 @@ export interface VueFlowWorkflow {
     triggerTypeLabel: string
     triggerName: string
     triggerLabel: string
+    startParams?: {
+        timeout?: number
+        [key: string]: any
+    }
     nodes: VueFlowNode[]
     edges: VueFlowEdge[]
     createdAt: number
