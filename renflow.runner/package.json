@@ -31,7 +31,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "node --import tsx --test ./src/nodes/builtin/llm-agent/tools.test.ts"
   },
   "bin": {
     "renflow-runner": "./bin/renflow-runner.js"
@@ -67,10 +68,12 @@
     "fastq": "^1.11.0",
     "jsonpath": "^1.1.1",
     "mri": "^1.2.0",
+    "openai": "^6.3.0",
     "reflect-metadata": "^0.2.2",
     "shell-quote": "^1.8.3",
     "uuid": "^13.0.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
   },
   "optionalDependencies": {
     "puppeteer": "^24.28.0"
