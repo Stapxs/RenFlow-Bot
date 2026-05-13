@@ -3,6 +3,19 @@ import type { NodeMetadata, NodeContext, NodeExecutionResult } from '../types.js
 import { fillTextTemplate } from '../../utils/node.js'
 import { runAgentLlmNode } from './llm-agent/runtime.js'
 
+const DEFAULT_AGENT_SYSTEM_PROMPT = [
+    '你是 RenFlow 的工作流助手。',
+    '你的职责是理解用户目标，必要时调用工具完成查询、分析和节点执行，并基于工具结果给出最终答复。',
+    '规则：',
+    '1. 如果任务需要调用节点功能，先优先使用 list_available_nodes 确认可用节点、参数结构和输出结构，再决定是否执行。',
+    '2. 使用 execute_node 时，必须明确提供 nodeType；params 必须符合节点参数结构；input 作为该节点的一次性输入。',
+    '3. execute_node 只会单次执行目标节点，不代表运行整个工作流，不会自动触发后续节点。不要把它当作工作流调度器。',
+    '4. 不要臆造不存在的节点、参数或输出字段；不确定时先调用 list_available_nodes。',
+    '5. 能直接回答时直接回答；只有在确实需要外部信息或节点能力时才调用工具。',
+    '6. 回答时优先引用真实工具结果；如果工具失败，要明确说明失败原因，不要假装成功。',
+    '7. 若用户要求执行节点，默认只执行最小必要次数，避免重复调用。'
+].join('\n')
+
 /**
  * LLM 节点
  * 支持 OpenAI 单次请求，以及基于 Responses API 的 Agent 模式。
@@ -15,27 +28,19 @@ export class LlmNode extends BaseNode {
             || raw?.rawText
             || fallbackMessage
             || (status ? `HTTP ${status}` : '上游返回错误')
-        const retryable = Boolean(errorObj?.retryable)
-            || (typeof status === 'number' && status >= 500)
-        const retryAfter = Number(errorObj?.retry_after ?? errorObj?.retryAfter ?? 0)
         const code = errorObj?.error_code ?? errorObj?.code ?? null
         const name = errorObj?.error_name ?? errorObj?.type ?? null
 
         return {
             message: String(message),
-            retryable,
-            retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
             code,
             name,
             details: errorObj
         }
     }
 
-    private async maybeWaitForRetry(errorInfo: { retryable: boolean; retryAfter: number | null }, attempt: number): Promise<void> {
-        const waitMs = errorInfo.retryAfter
-            ? Math.max(1000, Math.min(errorInfo.retryAfter * 1000, 120000))
-            : 200 * attempt
-        await new Promise(resolve => setTimeout(resolve, waitMs))
+    private async maybeWaitForRetry(): Promise<void> {
+        await new Promise(resolve => setTimeout(resolve, 500))
     }
 
     private rewriteBaseUrlForProxy(baseUrl: string, context: NodeContext): string {
@@ -56,7 +61,7 @@ export class LlmNode extends BaseNode {
         id: 'llm',
         name: 'LLM 调用',
         description: '调用大语言模型并返回文本结果',
-        fullDescription: '用于调用大语言模型完成文本生成、提取、改写等任务。当前支持 OpenAI 单次请求，以及带会话、工具和压缩能力的 Agent 模式。',
+        fullDescription: '用于调用大语言模型完成文本生成、提取、改写等任务。当前支持 OpenAI 单次请求，以及带会话和工具能力的 Agent 模式。',
         category: 'llm',
         icon: 'robot',
         settingsComponent: 'LlmSettings',
@@ -112,7 +117,8 @@ export class LlmNode extends BaseNode {
                 label: '系统提示词',
                 type: 'textarea',
                 dynamic: true,
-                placeholder: '可选，用于约束模型行为'
+                defaultValue: DEFAULT_AGENT_SYSTEM_PROMPT,
+                placeholder: '留空时 Agent 模式会自动使用默认系统提示词'
             },
             {
                 key: 'temperature',
@@ -174,27 +180,11 @@ export class LlmNode extends BaseNode {
                 visibleWhen: { key: 'mode', value: 'agent' }
             },
             {
-                key: 'compressionThreshold',
-                label: '压缩阈值',
-                type: 'number',
-                defaultValue: 12,
-                placeholder: '达到多少条消息后压缩',
-                visibleWhen: { key: 'mode', value: 'agent' }
-            },
-            {
-                key: 'compressionWindow',
-                label: '保留窗口',
-                type: 'number',
-                defaultValue: 6,
-                placeholder: '压缩后保留最近消息数',
-                visibleWhen: { key: 'mode', value: 'agent' }
-            },
-            {
                 key: 'enabledTools',
                 label: '启用工具(JSON)',
                 type: 'textarea',
-                defaultValue: '["http_request","get_system_info","get_time"]',
-                placeholder: '例如 ["http_request","get_time"]',
+                defaultValue: '["http_request","get_system_info","get_time","open_url_in_browser","list_available_nodes","execute_node"]',
+                placeholder: '例如 ["get_time","open_url_in_browser","list_available_nodes","execute_node"]',
                 visibleWhen: { key: 'mode', value: 'agent' }
             },
             {
@@ -202,15 +192,7 @@ export class LlmNode extends BaseNode {
                 label: 'MCP Servers(JSON)',
                 type: 'textarea',
                 defaultValue: '[]',
-                placeholder: '[{"id":"docs","transport":"http","endpoint":"https://example.com/mcp"}]',
-                visibleWhen: { key: 'mode', value: 'agent' }
-            },
-            {
-                key: 'skills',
-                label: 'Skills(JSON)',
-                type: 'textarea',
-                defaultValue: '[]',
-                placeholder: '[{"id":"summarizer","version":"1.0.0"}]',
+                placeholder: '[{"serverLabel":"docs","serverUrl":"https://example.com/mcp","allowedTools":["search"],"requireApproval":"always"}]',
                 visibleWhen: { key: 'mode', value: 'agent' }
             }
         ],
@@ -243,7 +225,7 @@ export class LlmNode extends BaseNode {
                 key: 'sessionInfo',
                 label: '会话信息',
                 type: 'object',
-                description: 'Agent 模式下返回会话状态、摘要、tool trace 与占位配置'
+                description: 'Agent 模式下返回 OpenAI state、tool trace 与 MCP 配置'
             },
             {
                 key: 'raw',
@@ -277,7 +259,8 @@ export class LlmNode extends BaseNode {
         const provider = String(params.provider || 'openai')
         const model = String(fillTextTemplate(String(params.model || ''), input, context) || '')
         const prompt = fillTextTemplate(String(params.prompt || ''), input, context)
-        const systemPrompt = fillTextTemplate(String(params.systemPrompt || ''), input, context)
+        const rawSystemPrompt = fillTextTemplate(String(params.systemPrompt || ''), input, context)
+        const systemPrompt = mode === 'agent'? (rawSystemPrompt.trim() || DEFAULT_AGENT_SYSTEM_PROMPT): rawSystemPrompt
         const temperature = Number(params.temperature ?? 0.7)
         const maxTokens = Number(params.maxTokens ?? 1024)
         const rawBaseUrl = fillTextTemplate(String(params.baseUrl || 'https://api.openai.com/v1'), input, context).replace(/\/$/, '')
@@ -287,15 +270,14 @@ export class LlmNode extends BaseNode {
         const retries = Math.max(0, Number(params.retries ?? 0))
         const sessionKey = fillTextTemplate(String(params.sessionKey || ''), input, context)
         const maxTurns = Math.max(1, Number(params.maxTurns ?? 8))
-        const compressionThreshold = Math.max(2, Number(params.compressionThreshold ?? 12))
-        const compressionWindow = Math.max(1, Number(params.compressionWindow ?? 6))
-
-        const enabledToolsParsed = parseJsonField<string[]>(params.enabledTools ?? '["http_request","get_system_info","get_time"]', ['http_request', 'get_system_info', 'get_time'], 'enabledTools')
+        const enabledToolsParsed = parseJsonField<string[]>(
+            params.enabledTools ?? '["http_request","get_system_info","get_time","open_url_in_browser","list_available_nodes","execute_node"]',
+            ['http_request', 'get_system_info', 'get_time', 'open_url_in_browser', 'list_available_nodes', 'execute_node'],
+            'enabledTools'
+        )
         if (!enabledToolsParsed.ok) return { success: false, error: enabledToolsParsed.error }
         const mcpServersParsed = parseJsonField<any[]>(params.mcpServers ?? '[]', [], 'mcpServers')
         if (!mcpServersParsed.ok) return { success: false, error: mcpServersParsed.error }
-        const skillsParsed = parseJsonField<any[]>(params.skills ?? '[]', [], 'skills')
-        if (!skillsParsed.ok) return { success: false, error: skillsParsed.error }
 
         if (!model) {
             return { success: false, error: '模型不能为空' }
@@ -323,11 +305,8 @@ export class LlmNode extends BaseNode {
                 retries,
                 sessionKey,
                 maxTurns,
-                compressionThreshold,
-                compressionWindow,
                 enabledTools: Array.isArray(enabledToolsParsed.value) ? enabledToolsParsed.value.map(item => String(item)) : [],
-                mcpServers: Array.isArray(mcpServersParsed.value) ? mcpServersParsed.value : [],
-                skills: Array.isArray(skillsParsed.value) ? skillsParsed.value : []
+                mcpServers: Array.isArray(mcpServersParsed.value) ? mcpServersParsed.value : []
             }, context)
         }
 
@@ -376,8 +355,8 @@ export class LlmNode extends BaseNode {
 
                 if (!res.ok) {
                     const errorInfo = this.buildUpstreamError(raw, res.status)
-                    if (attempt <= retries && errorInfo.retryable) {
-                        await this.maybeWaitForRetry(errorInfo, attempt)
+                    if (attempt <= retries) {
+                        await this.maybeWaitForRetry()
                         continue
                     }
                     return {
@@ -393,8 +372,6 @@ export class LlmNode extends BaseNode {
                                 request: body,
                                 response: raw,
                                 status: res.status,
-                                retryable: errorInfo.retryable,
-                                retryAfter: errorInfo.retryAfter,
                                 errorCode: errorInfo.code,
                                 errorName: errorInfo.name,
                                 duration: Date.now() - start
@@ -405,8 +382,8 @@ export class LlmNode extends BaseNode {
 
                 if (raw?.error) {
                     const errorInfo = this.buildUpstreamError(raw, res.status)
-                    if (attempt <= retries && errorInfo.retryable) {
-                        await this.maybeWaitForRetry(errorInfo, attempt)
+                    if (attempt <= retries) {
+                        await this.maybeWaitForRetry()
                         continue
                     }
                     return {
@@ -422,8 +399,6 @@ export class LlmNode extends BaseNode {
                                 request: body,
                                 response: raw,
                                 status: res.status,
-                                retryable: errorInfo.retryable,
-                                retryAfter: errorInfo.retryAfter,
                                 errorCode: errorInfo.code,
                                 errorName: errorInfo.name,
                                 duration: Date.now() - start
@@ -432,10 +407,10 @@ export class LlmNode extends BaseNode {
                     }
                 }
 
+                this.logger.debug(raw)
+
                 const text = raw?.choices?.[0]?.message?.content
-                const normalizedText = Array.isArray(text)
-                    ? text.map((item: any) => item?.text || '').join('')
-                    : String(text || '')
+                const normalizedText = Array.isArray(text)? text.map((item: any) => item?.text || '').join(''): String(text || '')
 
                 return {
                     success: true,
@@ -451,7 +426,7 @@ export class LlmNode extends BaseNode {
             } catch (err: any) {
                 clearTimeout(timer)
                 if (attempt <= retries) {
-                    await new Promise(resolve => setTimeout(resolve, 200 * attempt))
+                    await this.maybeWaitForRetry()
                     continue
                 }
 

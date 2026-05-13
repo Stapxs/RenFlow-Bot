@@ -1,6 +1,8 @@
+import 'reflect-metadata'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import { NodeManager } from '../../NodeManager.js'
 import { builtinAgentTools, getBuiltinAgentTools } from './tools.js'
 
 const baseContext = {
@@ -15,7 +17,8 @@ const baseContext = {
             error: () => {}
         }
     },
-    timeout: 100
+    timeout: 100,
+    nodeManager: new NodeManager()
 }
 
 function getTool(name: string) {
@@ -160,4 +163,96 @@ test('get_time returns requested timezone and valid timestamps', async () => {
     assert.doesNotThrow(() => new Date(result.structured.iso))
     assert.equal(typeof result.structured.locale, 'string')
     assert.ok(result.content.includes('"timeZone": "Asia/Shanghai"'))
+})
+
+test('open_url_in_browser returns success without side effects outside tauri', async () => {
+    const tool = getTool('open_url_in_browser')
+    const originalTauriInternals = (globalThis as any).__TAURI_INTERNALS__
+
+    try {
+        delete (globalThis as any).__TAURI_INTERNALS__
+        const result = await tool.execute(tool.schema.parse({ url: 'https://example.com' }) as Record<string, any>, baseContext)
+
+        assert.equal(result.success, true)
+        assert.equal(result.structured.opened, false)
+        assert.equal(result.structured.reason, 'not_tauri')
+        assert.equal(result.structured.url, 'https://example.com')
+    } finally {
+        if (originalTauriInternals !== undefined) {
+            ;(globalThis as any).__TAURI_INTERNALS__ = originalTauriInternals
+        }
+    }
+})
+
+test('open_url_in_browser invokes tauri backend when available', async () => {
+    const tool = getTool('open_url_in_browser')
+    const originalTauriInternals = (globalThis as any).__TAURI_INTERNALS__
+    const originalInvoke = (globalThis as any).__agentTauriInvoke
+    const invokeCalls: any[] = []
+
+    try {
+        ;(globalThis as any).__TAURI_INTERNALS__ = {}
+        ;(globalThis as any).__agentTauriInvoke = async (cmd: string, args: Record<string, any>) => {
+            invokeCalls.push({ cmd, args })
+            return null
+        }
+
+        const result = await tool.execute(tool.schema.parse({ url: 'https://example.com' }) as Record<string, any>, baseContext)
+
+        assert.equal(result.success, true)
+        assert.equal(result.structured.opened, true)
+        assert.equal(result.structured.url, 'https://example.com')
+        assert.deepEqual(invokeCalls, [
+            {
+                cmd: 'sys_open_in_browser',
+                args: { data: 'https://example.com' }
+            }
+        ])
+    } finally {
+        if (originalTauriInternals !== undefined) {
+            ;(globalThis as any).__TAURI_INTERNALS__ = originalTauriInternals
+        } else {
+            delete (globalThis as any).__TAURI_INTERNALS__
+        }
+
+        if (originalInvoke !== undefined) {
+            ;(globalThis as any).__agentTauriInvoke = originalInvoke
+        } else {
+            delete (globalThis as any).__agentTauriInvoke
+        }
+    }
+})
+
+test('list_available_nodes returns node metadata list', async () => {
+    const tool = getTool('list_available_nodes')
+    const result = await tool.execute(tool.schema.parse({}) as Record<string, any>, baseContext)
+
+    assert.equal(result.success, true)
+    assert.ok(Array.isArray(result.structured.nodes))
+    assert.ok(result.structured.nodes.length > 0)
+    const llmNode = result.structured.nodes.find((item: any) => item.nodeType === 'llm')
+    assert.ok(llmNode)
+    assert.equal(llmNode.name, 'LLM 调用')
+    assert.ok(Array.isArray(llmNode.params))
+})
+
+test('execute_node runs target node by nodeType once', async () => {
+    const tool = getTool('execute_node')
+    const result = await tool.execute(tool.schema.parse({
+        nodeType: 'ifelse',
+        input: { score: 80 },
+        params: {
+            condition: {
+                parameter: 'input.score',
+                mode: 'greater_or_equal',
+                value: 60
+            }
+        }
+    }) as Record<string, any>, baseContext)
+
+    assert.equal(result.success, true)
+    assert.equal(result.structured.success, true)
+    assert.equal(result.structured.nodeType, 'ifelse')
+    assert.equal(result.structured.nodeName, '条件分支')
+    assert.equal(result.structured.output._branch, true)
 })

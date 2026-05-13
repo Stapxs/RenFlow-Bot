@@ -1,14 +1,6 @@
-import type { NodeContext } from '../../types.js'
+import type { NodeContext, NodeMetadata, NodeExecutionResult } from '../../types.js'
+import type { NodeManager } from '../../NodeManager.js'
 import type { ZodTypeAny } from 'zod'
-
-export type AgentMessageRole = 'system' | 'user' | 'assistant' | 'tool'
-
-export interface AgentMessage {
-    role: AgentMessageRole
-    content: string
-    name?: string
-    createdAt: string
-}
 
 export interface AgentToolTrace {
     id: string
@@ -21,13 +13,24 @@ export interface AgentToolTrace {
     error?: string
 }
 
+export interface AgentMcpSessionState {
+    serverLabel: string
+    serverUrl: string
+    sessionId?: string
+    initialized: boolean
+    updatedAt: string
+}
+
 export interface AgentSession {
     sessionKey: string
-    history: AgentMessage[]
-    summary: string
-    recentMessages: AgentMessage[]
-    toolTrace: AgentToolTrace[]
     lastResponseId?: string
+    continuationItems: AgentContinuationItem[]
+    pendingToolOutputs: Array<Record<string, any>>
+    contextMessages: AgentContextMessage[]
+    compatibilityMode: 'stateful' | 'stateless'
+    summary: string
+    toolTrace: AgentToolTrace[]
+    mcpSessions: Record<string, AgentMcpSessionState>
     updatedAt: string
 }
 
@@ -47,27 +50,56 @@ export interface AgentToolExecutionContext {
     sessionKey: string
     nodeContext: NodeContext
     timeout: number
+    nodeManager: NodeManager
+}
+
+export interface AgentContinuationItem {
+    type: string
+    [key: string]: any
+}
+
+export interface AgentContextMessage {
+    role: 'user' | 'assistant' | 'tool'
+    content: string
+    toolName?: string
 }
 
 export interface AgentTool {
     name: string
     description: string
     schema: ZodTypeAny
+    parametersSchema?: Record<string, any>
+    strict?: boolean
     execute(args: Record<string, any>, context: AgentToolExecutionContext): Promise<AgentToolExecutionResult>
 }
 
-export interface AgentMcpServerConfig {
-    id: string
-    transport?: string
-    endpoint?: string
-    enabledTools?: string[]
+export interface AgentNodeDescriptor {
+    nodeType: string
+    name: string
+    description: string
+    category: string
+    params: NodeMetadata['params']
+    outputSchema?: NodeMetadata['outputSchema']
 }
 
-export interface AgentSkillConfig {
-    id: string
-    version?: string
-    promptFragment?: string
-    enabledTools?: string[]
+export interface AgentNodeExecutionStructuredResult {
+    success: boolean
+    nodeType: string
+    nodeName: string
+    input: any
+    params: Record<string, any>
+    output?: any
+    error?: string
+    raw: NodeExecutionResult
+}
+
+export interface AgentMcpServerConfig {
+    serverLabel: string
+    serverUrl: string
+    allowedTools?: string[]
+    requireApproval?: 'always' | 'never'
+    headers?: Record<string, string>
+    enabled?: boolean
 }
 
 export interface AgentRuntimeCallbacks {
@@ -92,9 +124,6 @@ export interface AgentRuntimeParams {
     retries: number
     sessionKey: string
     maxTurns: number
-    compressionThreshold: number
-    compressionWindow: number
     enabledTools: string[]
     mcpServers: AgentMcpServerConfig[]
-    skills: AgentSkillConfig[]
 }

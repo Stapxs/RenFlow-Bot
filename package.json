@@ -14,7 +14,7 @@
     "docs:build": "typedoc && vitepress build renflow.document",
     "docs:preview": "typedoc && vitepress preview renflow.document",
 
-    "build:runner": "yarn workspace renflow.runner build",
+    "build:runner": "yarn workspace renflow-runner build",
     "dev": "vite",
     "dev:tauri": "tauri dev -c src-tauri/tauri.conf.json",
     "build": "yarn build:runner && vue-tsc -b && vite build",

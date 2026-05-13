@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentSession, AgentSessionStorage } from './types.js'
+import type { AgentSession, AgentSessionStorage } from './types.js'
 
 class InMemoryAgentSessionStorage implements AgentSessionStorage {
     private readonly sessions = new Map<string, AgentSession>()
@@ -21,24 +21,17 @@ export class AgentSessionManager {
 
         const session: AgentSession = {
             sessionKey,
-            history: [],
+            continuationItems: [],
+            pendingToolOutputs: [],
+            contextMessages: [],
+            compatibilityMode: 'stateless',
             summary: '',
-            recentMessages: [],
             toolTrace: [],
+            mcpSessions: {},
             updatedAt: new Date().toISOString()
         }
         this.storage.set(session)
         return session
-    }
-
-    appendMessage(session: AgentSession, message: Omit<AgentMessage, 'createdAt'> & { createdAt?: string }): void {
-        const normalized: AgentMessage = {
-            ...message,
-            createdAt: message.createdAt || new Date().toISOString()
-        }
-        session.history.push(normalized)
-        session.recentMessages.push(normalized)
-        session.updatedAt = new Date().toISOString()
     }
 
     save(session: AgentSession): void {

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import BcTab from 'vue3-bcui/packages/bc-tab'
-import { toast } from '@app/functions/toast'
 
 interface Props {
     nodeId: string
@@ -26,6 +25,19 @@ const providerOptions = [
     { label: '自定义 OpenAI 兼容', value: 'openai-compatible' },
 ]
 
+const defaultAgentSystemPrompt = [
+    '你是 RenFlow 的工作流助手。',
+    '你的职责是理解用户目标，必要时调用工具完成查询、分析和节点执行，并基于工具结果给出最终答复。',
+    '规则：',
+    '1. 如果任务需要调用节点功能，先优先使用 list_available_nodes 确认可用节点、参数结构和输出结构，再决定是否执行。',
+    '2. 使用 execute_node 时，必须明确提供 nodeType；params 必须符合节点参数结构；input 作为该节点的一次性输入。',
+    '3. execute_node 只会单次执行目标节点，不代表运行整个工作流，不会自动触发后续节点。不要把它当作工作流调度器。',
+    '4. 不要臆造不存在的节点、参数或输出字段；不确定时先调用 list_available_nodes。',
+    '5. 能直接回答时直接回答；只有在确实需要外部信息或节点能力时才调用工具。',
+    '6. 回答时优先引用真实工具结果；如果工具失败，要明确说明失败原因，不要假装成功。',
+    '7. 若用户要求执行节点，默认只执行最小必要次数，避免重复调用。'
+].join('\n')
+
 const builtinTools = [
     {
         id: 'http_request',
@@ -45,32 +57,39 @@ const builtinTools = [
         description: '获取当前时间，可选指定时区。',
         fields: ['timeZone']
     },
+    {
+        id: 'open_url_in_browser',
+        name: 'open_url_in_browser',
+        description: '在 Tauri 桌面环境中用系统浏览器打开链接；非 Tauri 环境下仅返回未执行状态。',
+        fields: ['url']
+    },
+    {
+        id: 'list_available_nodes',
+        name: 'list_available_nodes',
+        description: '列出当前 runner 可执行的节点类型、参数结构和输出结构。',
+        fields: []
+    },
+    {
+        id: 'execute_node',
+        name: 'execute_node',
+        description: '按节点类型执行一次节点功能，传入 input 和 params。',
+        fields: ['nodeType', 'input', 'params']
+    },
 ]
 
 interface McpServerItem {
-    id: string
-    transport?: string
-    endpoint?: string
-    enabledTools?: string[]
-    enabled?: boolean
-}
-
-interface SkillItem {
-    id: string
-    name?: string
-    description?: string
-    version?: string
-    promptFragment?: string
-    enabledTools?: string[]
-    sourceFile?: string
+    serverLabel: string
+    serverUrl: string
+    allowedTools?: string[]
+    requireApproval?: 'always' | 'never'
+    headers?: Record<string, string>
     enabled?: boolean
 }
 
 const values = computed({
     get() {
-        let enabledTools = '["http_request","get_system_info","get_time"]'
+        let enabledTools = '["http_request","get_system_info","get_time","open_url_in_browser","list_available_nodes","execute_node"]'
         let mcpServers = '[]'
-        let skills = '[]'
         try {
             const candidate = (props.modelValue || {}).enabledTools
             if (typeof candidate === 'string') {
@@ -80,7 +99,7 @@ const values = computed({
                 }
             }
         } catch {
-            enabledTools = '["http_request","get_system_info","get_time"]'
+            enabledTools = '["http_request","get_system_info","get_time","open_url_in_browser","list_available_nodes","execute_node"]'
         }
         try {
             const candidate = (props.modelValue || {}).mcpServers
@@ -93,24 +112,13 @@ const values = computed({
         } catch {
             mcpServers = '[]'
         }
-        try {
-            const candidate = (props.modelValue || {}).skills
-            if (typeof candidate === 'string') {
-                const parsed = JSON.parse(candidate)
-                if (Array.isArray(parsed)) {
-                    skills = candidate
-                }
-            }
-        } catch {
-            skills = '[]'
-        }
 
         return {
             mode: 'single',
             provider: 'openai',
             model: 'gpt-4o-mini',
             prompt: '',
-            systemPrompt: '',
+            systemPrompt: defaultAgentSystemPrompt,
             temperature: 0.7,
             maxTokens: 1024,
             baseUrl: 'https://api.openai.com/v1',
@@ -119,11 +127,8 @@ const values = computed({
             retries: 0,
             sessionKey: '',
             maxTurns: 8,
-            compressionThreshold: 12,
-            compressionWindow: 6,
             enabledTools,
             mcpServers,
-            skills,
             ...(props.modelValue || {}),
         }
     },
@@ -148,6 +153,31 @@ const updateField = (key: string, value: any) => {
     }
 }
 
+const parseStringArray = (raw: string): string[] => {
+    try {
+        const parsed = JSON.parse(raw || '[]')
+        return Array.isArray(parsed) ? parsed.map(item => String(item)) : []
+    } catch {
+        return []
+    }
+}
+
+const parseStringRecord = (raw: string): Record<string, string> => {
+    try {
+        const parsed = JSON.parse(raw || '{}')
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return {}
+        }
+        return Object.fromEntries(
+            Object.entries(parsed)
+                .filter(([key, value]) => String(key).trim() && value !== undefined && value !== null)
+                .map(([key, value]) => [String(key), String(value)])
+        )
+    } catch {
+        return {}
+    }
+}
+
 const toggleTool = (toolId: string, checked: boolean) => {
     const next = new Set(enabledToolSet.value)
     if (checked) {
@@ -162,10 +192,11 @@ const mcpServersList = computed<McpServerItem[]>(() => {
     try {
         const parsed = JSON.parse(String(values.value.mcpServers || '[]'))
         return Array.isArray(parsed) ? parsed.map((item, index) => ({
-            id: String(item?.id || `mcp-${index + 1}`),
-            transport: item?.transport ? String(item.transport) : '',
-            endpoint: item?.endpoint ? String(item.endpoint) : '',
-            enabledTools: Array.isArray(item?.enabledTools) ? item.enabledTools.map((tool: any) => String(tool)) : [],
+            serverLabel: String(item?.serverLabel || `mcp-${index + 1}`),
+            serverUrl: item?.serverUrl ? String(item.serverUrl) : '',
+            allowedTools: Array.isArray(item?.allowedTools) ? item.allowedTools.map((tool: any) => String(tool)) : [],
+            requireApproval: item?.requireApproval === 'never' ? 'never' : 'always',
+            headers: item?.headers && typeof item.headers === 'object' ? item.headers : {},
             enabled: item?.enabled !== false
         })) : []
     } catch {
@@ -180,10 +211,11 @@ const syncMcpServers = (servers: McpServerItem[]) => {
 const addMcpServer = () => {
     const next = [...mcpServersList.value]
     next.unshift({
-        id: `mcp-${Date.now().toString(36)}`,
-        transport: '',
-        endpoint: '',
-        enabledTools: [],
+        serverLabel: `mcp-${Date.now().toString(36)}`,
+        serverUrl: '',
+        allowedTools: [],
+        requireApproval: 'always',
+        headers: {},
         enabled: true
     })
     syncMcpServers(next)
@@ -203,131 +235,6 @@ const removeMcpServer = (index: number) => {
     const next = [...mcpServersList.value]
     next.splice(index, 1)
     syncMcpServers(next)
-}
-
-const skillFileInput = ref<HTMLInputElement | null>(null)
-
-const skillsList = computed<SkillItem[]>(() => {
-    try {
-        const parsed = JSON.parse(String(values.value.skills || '[]'))
-        return Array.isArray(parsed) ? parsed.map((item, index) => ({
-            id: String(item?.id || `skill-${index + 1}`),
-            name: item?.name ? String(item.name) : '',
-            description: item?.description ? String(item.description) : '',
-            version: item?.version ? String(item.version) : '',
-            promptFragment: item?.promptFragment ? String(item.promptFragment) : '',
-            enabledTools: Array.isArray(item?.enabledTools) ? item.enabledTools.map((tool: any) => String(tool)) : [],
-            sourceFile: item?.sourceFile ? String(item.sourceFile) : '',
-            enabled: item?.enabled !== false
-        })) : []
-    } catch {
-        return []
-    }
-})
-
-const syncSkills = (skills: SkillItem[]) => {
-    updateField('skills', JSON.stringify(skills))
-}
-
-const updateSkill = (index: number, patch: Partial<SkillItem>) => {
-    const next = [...skillsList.value]
-    if (!next[index]) return
-    next[index] = {
-        ...next[index],
-        ...patch
-    }
-    syncSkills(next)
-}
-
-const removeSkill = (index: number) => {
-    const next = [...skillsList.value]
-    next.splice(index, 1)
-    syncSkills(next)
-}
-
-const openSkillUpload = () => {
-    skillFileInput.value?.click()
-}
-
-const normalizeSkillId = (name: string) => {
-    const normalized = name
-        .replace(/\.[^/.]+$/, '')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9-_]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-    return normalized || `skill-${Date.now().toString(36)}`
-}
-
-const parseSkillFrontmatter = (text: string) => {
-    const match = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
-    if (!match) {
-        return {
-            meta: {},
-            body: text
-        }
-    }
-
-    const metaLines = match[1].split('\n')
-    const meta: Record<string, string> = {}
-    for (const rawLine of metaLines) {
-        const line = rawLine.trim()
-        if (!line || line.startsWith('#')) continue
-        const separatorIndex = line.indexOf(':')
-        if (separatorIndex <= 0) continue
-        const key = line.slice(0, separatorIndex).trim()
-        const value = line.slice(separatorIndex + 1).trim()
-        meta[key] = value
-    }
-
-    return {
-        meta,
-        body: match[2].trim()
-    }
-}
-
-const handleSkillUpload = async (event: Event) => {
-    const input = event.target as HTMLInputElement
-    const file = input.files?.[0]
-    if (!file) return
-
-    try {
-        const text = await file.text()
-        const { meta, body } = parseSkillFrontmatter(text)
-        let nextSkill: SkillItem
-
-        if (file.name.toLowerCase().endsWith('.json')) {
-            const parsed = JSON.parse(text)
-            nextSkill = {
-                id: String(parsed?.id || normalizeSkillId(file.name)),
-                name: parsed?.name ? String(parsed.name) : '',
-                description: parsed?.description ? String(parsed.description) : '',
-                version: parsed?.version ? String(parsed.version) : '',
-                promptFragment: parsed?.promptFragment ? String(parsed.promptFragment) : '',
-                enabledTools: Array.isArray(parsed?.enabledTools) ? parsed.enabledTools.map((tool: any) => String(tool)) : [],
-                sourceFile: file.name,
-                enabled: parsed?.enabled !== false
-            }
-        } else {
-            const resolvedName = meta.name ? String(meta.name) : ''
-            nextSkill = {
-                id: normalizeSkillId(resolvedName || file.name),
-                name: resolvedName,
-                description: meta.description ? String(meta.description) : '',
-                version: meta.version ? String(meta.version) : '',
-                promptFragment: body,
-                enabledTools: [],
-                sourceFile: file.name,
-                enabled: true
-            }
-        }
-
-        syncSkills([nextSkill, ...skillsList.value])
-    } catch (error: any) {
-        toast.error(`Skill 文件解析失败: ${error?.message || String(error)}`)
-    } finally {
-        input.value = ''
-    }
 }
 </script>
 
@@ -459,38 +366,11 @@ const handleSkillUpload = async (event: Event) => {
                                 step="1"
                                 @input="updateField('maxTurns', Number(($event.target as HTMLInputElement).value))">
                         </div>
-
-                        <div class="field">
-                            <label>压缩阈值</label>
-                            <input
-                                :value="values.compressionThreshold"
-                                type="number"
-                                min="2"
-                                step="1"
-                                @input="updateField('compressionThreshold', Number(($event.target as HTMLInputElement).value))">
-                        </div>
-
-                        <div class="field">
-                            <label>保留窗口</label>
-                            <input
-                                :value="values.compressionWindow"
-                                type="number"
-                                min="1"
-                                step="1"
-                                @input="updateField('compressionWindow', Number(($event.target as HTMLInputElement).value))">
-                        </div>
-
                     </template>
                 </div>
             </div>
 
             <div class="llm-sidecard">
-                <input
-                    ref="skillFileInput"
-                    type="file"
-                    accept=".json,.md,.txt"
-                    class="hidden-file-input"
-                    @change="handleSkillUpload">
                 <BcTab class="llm-side-tabs">
                     <div icon="fa-screwdriver-wrench">
                         <div class="side-panel">
@@ -531,10 +411,10 @@ const handleSkillUpload = async (event: Event) => {
                                 <button class="add-circle-btn" type="button" @click="addMcpServer">+</button>
                             </header>
                             <div v-if="mcpServersList.length > 0" class="tool-list">
-                                <article v-for="(server, index) in mcpServersList" :key="server.id" class="tool-card mcp-card">
+                                <article v-for="(server, index) in mcpServersList" :key="server.serverLabel" class="tool-card mcp-card">
                                     <div class="tool-head">
                                         <div class="tool-title">
-                                            <strong>{{ server.id || '未命名 MCP' }}</strong>
+                                            <strong>{{ server.serverLabel || '未命名 MCP' }}</strong>
                                         </div>
                                         <div class="card-actions">
                                             <label class="ss-switch">
@@ -550,103 +430,49 @@ const handleSkillUpload = async (event: Event) => {
                                         </div>
                                     </div>
                                     <div class="field">
-                                        <label>ID</label>
+                                        <label>Server Label</label>
                                         <input
-                                            :value="server.id"
+                                            :value="server.serverLabel"
                                             type="text"
                                             placeholder="例如 docs"
-                                            @input="updateMcpServer(index, { id: ($event.target as HTMLInputElement).value })">
+                                            @input="updateMcpServer(index, { serverLabel: ($event.target as HTMLInputElement).value })">
                                     </div>
                                     <div class="field">
-                                        <label>Transport</label>
+                                        <label>Server URL</label>
                                         <input
-                                            :value="server.transport"
-                                            type="text"
-                                            placeholder="例如 http / sse / stdio"
-                                            @input="updateMcpServer(index, { transport: ($event.target as HTMLInputElement).value })">
-                                    </div>
-                                    <div class="field">
-                                        <label>Endpoint</label>
-                                        <input
-                                            :value="server.endpoint"
+                                            :value="server.serverUrl"
                                             type="text"
                                             placeholder="例如 https://example.com/mcp"
-                                            @input="updateMcpServer(index, { endpoint: ($event.target as HTMLInputElement).value })">
+                                            @input="updateMcpServer(index, { serverUrl: ($event.target as HTMLInputElement).value })">
+                                    </div>
+                                    <div class="field">
+                                        <label>Allowed Tools(JSON)</label>
+                                        <textarea
+                                            rows="3"
+                                            :value="JSON.stringify(server.allowedTools || [])"
+                                            placeholder='例如 ["search","fetch"]'
+                                            @input="updateMcpServer(index, { allowedTools: parseStringArray(($event.target as HTMLTextAreaElement).value) })" />
+                                    </div>
+                                    <div class="field">
+                                        <label>Require Approval</label>
+                                        <select
+                                            :value="server.requireApproval || 'always'"
+                                            @change="updateMcpServer(index, { requireApproval: ($event.target as HTMLSelectElement).value as 'always' | 'never' })">
+                                            <option value="always">always</option>
+                                            <option value="never">never</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label>Headers(JSON)</label>
+                                        <textarea
+                                            rows="3"
+                                            :value="JSON.stringify(server.headers || {}, null, 2)"
+                                            placeholder='例如 {"Authorization":"Bearer token"}'
+                                            @input="updateMcpServer(index, { headers: parseStringRecord(($event.target as HTMLTextAreaElement).value) })" />
                                     </div>
                                 </article>
                             </div>
                             <div v-else class="empty-panel">还没有 MCP server。点击右上角 `+` 新增。</div>
-                        </div>
-                    </div>
-                    <div icon="fa-wand-magic-sparkles">
-                        <div class="side-panel">
-                            <header class="section-head">
-                                <span>Skills</span>
-                                <button class="add-circle-btn" type="button" @click="openSkillUpload">+</button>
-                            </header>
-                            <div v-if="skillsList.length > 0" class="tool-list">
-                                <article v-for="(skill, index) in skillsList" :key="`${skill.id}-${index}`" class="tool-card mcp-card">
-                                    <div class="tool-head">
-                                        <div class="tool-title">
-                                            <strong>{{ skill.name || skill.id }}</strong>
-                                            <span>{{ skill.sourceFile || 'uploaded' }}</span>
-                                        </div>
-                                        <div class="card-actions">
-                                            <label class="ss-switch">
-                                                <input
-                                                    :checked="skill.enabled !== false"
-                                                    type="checkbox"
-                                                    @change="updateSkill(index, { enabled: ($event.target as HTMLInputElement).checked })">
-                                                <div>
-                                                    <div />
-                                                </div>
-                                            </label>
-                                            <button class="circle-ghost-btn" type="button" @click="removeSkill(index)">×</button>
-                                        </div>
-                                    </div>
-                                    <div class="field">
-                                        <label>ID</label>
-                                        <input
-                                            :value="skill.id"
-                                            type="text"
-                                            placeholder="例如 summarizer"
-                                            @input="updateSkill(index, { id: ($event.target as HTMLInputElement).value })">
-                                    </div>
-                                    <div class="field">
-                                        <label>Name</label>
-                                        <input
-                                            :value="skill.name"
-                                            type="text"
-                                            placeholder="例如 Workflow Sync"
-                                            @input="updateSkill(index, { name: ($event.target as HTMLInputElement).value })">
-                                    </div>
-                                    <div class="field">
-                                        <label>Description</label>
-                                        <textarea
-                                            rows="3"
-                                            :value="skill.description"
-                                            placeholder="技能描述"
-                                            @input="updateSkill(index, { description: ($event.target as HTMLTextAreaElement).value })" />
-                                    </div>
-                                    <div class="field">
-                                        <label>Version</label>
-                                        <input
-                                            :value="skill.version"
-                                            type="text"
-                                            placeholder="例如 1.0.0"
-                                            @input="updateSkill(index, { version: ($event.target as HTMLInputElement).value })">
-                                    </div>
-                                    <div class="field">
-                                        <label>Prompt Fragment</label>
-                                        <textarea
-                                            rows="5"
-                                            :value="skill.promptFragment"
-                                            placeholder="上传后可继续编辑 prompt 片段"
-                                            @input="updateSkill(index, { promptFragment: ($event.target as HTMLTextAreaElement).value })" />
-                                    </div>
-                                </article>
-                            </div>
-                            <div v-else class="empty-panel">还没有 skills。点击右上角 `+` 上传 skill 文件。</div>
                         </div>
                     </div>
                 </BcTab>

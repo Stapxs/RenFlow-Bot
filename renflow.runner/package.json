@@ -32,7 +32,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "watch": "tsc --watch",
-    "test": "node --import tsx --test ./src/nodes/builtin/llm-agent/tools.test.ts"
+    "test": "node --import tsx --test ./src/nodes/builtin/llm-agent/*.test.ts"
   },
   "bin": {
     "renflow-runner": "./bin/renflow-runner.js"
