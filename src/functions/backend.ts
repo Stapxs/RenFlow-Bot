@@ -4,7 +4,6 @@ import { toast } from '@app/functions/toast'
 import { reactive } from 'vue'
 
 const logger = new Logger()
-const popInfo = null as any
 
 export const backend = reactive({
     type: 'web' as 'tauri' | 'web',

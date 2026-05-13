@@ -54,7 +54,7 @@ export class SendTextNode extends BaseNode {
         params: Record<string, any>,
         context: NodeContext
     ): Promise<NodeExecutionResult> {
-        const text = params.text
+        const text = params.text as string
 
         const bot = getGlobal(context, 'bot') as BaseBotAdapter
         if (!bot || typeof bot.callApiSync !== 'function') {

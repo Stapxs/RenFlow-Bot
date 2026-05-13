@@ -92,9 +92,6 @@ export interface NodeMetadata {
     settingsComponent?: string
 }
 
-/**
- * 节点执行上下文
- */
 export interface NodeContext {
     /** 节点 ID */
     nodeId: string

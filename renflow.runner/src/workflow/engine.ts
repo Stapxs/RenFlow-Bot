@@ -259,7 +259,14 @@ export class WorkflowEngine {
 
                 if (!state.executed && (expected > 0 ? state.inputs.length >= expected : false)) {
                     state.executed = true
-                    if (state.timer) { try { clearTimeout(state.timer) } catch {} state.timer = undefined }
+                    if (state.timer) {
+                        try {
+                            clearTimeout(state.timer)
+                        } catch (_error) {
+                            // ignore timer cleanup failure
+                        }
+                        state.timer = undefined
+                    }
                     result = await this.nodeManager.executeNode(
                         node.id,
                         node.type,
@@ -397,9 +404,7 @@ export class WorkflowEngine {
             }
         } else {
             // 其他条件节点：使用 output 作为分支键
-            const branchKey = (result.output && result.output._branchKey !== undefined)
-                ? String(result.output._branchKey)
-                : String(result.output)
+            const branchKey = (result.output && result.output._branchKey !== undefined)? String(result.output._branchKey): String(result.output)
             const nextNodeId = node.branches[branchKey] || node.branches['default']
 
             if (nextNodeId) {

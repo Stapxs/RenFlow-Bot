@@ -18,7 +18,7 @@
                 <font-awesome-icon :icon="['fas', 'fa-rotate-right']" />
                 重做
             </button>
-            <button class="toolbar-btn" @click="openActivityPreview" title="预览运行活动">
+            <button class="toolbar-btn" title="预览运行活动" @click="openActivityPreview">
                 <font-awesome-icon :icon="['fas', 'fa-chart-line']" />
                 预览活动
             </button>
