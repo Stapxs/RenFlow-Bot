@@ -38,7 +38,7 @@ pub fn run() {
                 Some("debug") => log::LevelFilter::Debug,
                 Some("info") => log::LevelFilter::Info,
                 Some("all") => log::LevelFilter::Debug,
-                _ => log::LevelFilter::Info,
+                _ => log::LevelFilter::Debug,
             };
             // 初始化 log4rs
             let stdout = ConsoleAppender::builder()

@@ -15,6 +15,7 @@ const NODE_CATEGORIES: NodeCategoryInfo[] = [
     { id: 'logic', name: '逻辑', description: '逻辑判断节点', icon: 'code' },
     { id: 'data', name: '数据', description: '数据处理节点', icon: 'database' },
     { id: 'network', name: '网络', description: '网络请求节点', icon: 'network-wired' },
+    { id: 'llm', name: '大模型', description: '大语言模型与 Agent 节点', icon: 'robot' },
     { id: 'custom', name: '自定义', description: '用户自定义节点', icon: 'puzzle-piece' },
 ]
 

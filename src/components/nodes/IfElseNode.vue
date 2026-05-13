@@ -91,7 +91,7 @@ defineEmits(['updateNodeInternals'])
     box-shadow: 0 0 5px var(--color-shader);
     background: var(--color-card);
     border-radius: 7px;
-    min-width: 150px;
+    min-width: 200px;
 }
 
 .if-else-node header {

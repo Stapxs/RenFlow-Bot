@@ -198,7 +198,7 @@ defineEmits(['updateNodeInternals'])
 .vue-flow__node-base {
     box-shadow: 0 0 5px var(--color-shader);
     min-height: unset;
-    min-width: 170px;
+    min-width: 200px;
     font-size: 0.8rem;
     padding: 15px 20px;
 }

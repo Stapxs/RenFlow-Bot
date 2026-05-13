@@ -103,6 +103,10 @@
                                 <label>描述</label>
                                 <div class="flow-value flow-desc">{{ workflowInfo.description || '-' }}</div>
                             </div>
+                            <div class="flow-row">
+                                <label>执行超时</label>
+                                <div class="flow-value">{{ workflowInfo.startParams?.timeout || 60000 }} ms</div>
+                            </div>
                             <div class="flow-actions">
                                 <button class="edit-btn" @click="openFlowEditor">编辑</button>
                             </div>
@@ -123,6 +127,11 @@
                                 <label>描述</label>
                                 <textarea v-model="localFlow.description" class="flow-value-edit" rows="3"
                                     placeholder="工作流描述" />
+                            </div>
+                            <div class="flow-row">
+                                <label>执行超时(ms)</label>
+                                <input v-model.number="localFlow.startParams.timeout" class="flow-value-edit" type="number"
+                                    min="1000" step="1000" placeholder="工作流执行超时">
                             </div>
                             <div class="flow-actions">
                                 <button class="cancel-btn" @click="cancelFlowEdit">取消</button>
@@ -262,7 +271,10 @@ const nodeManager = runnerNodeManager
 
 // 打开编辑器（复制当前值到本地副本）
 function openFlowEditor() {
-    localFlow.value = { ...workflowInfo.value }
+    localFlow.value = {
+        ...workflowInfo.value,
+        startParams: { ...(workflowInfo.value.startParams || { timeout: 60000 }) }
+    }
     editingFlow.value = true
 }
 
@@ -278,7 +290,10 @@ async function saveFlowEdit() {
 
 watch(workflowInfo, (newVal) => {
     if (!editingFlow.value) {
-        localFlow.value = { ...newVal }
+        localFlow.value = {
+            ...newVal,
+            startParams: { ...(newVal.startParams || { timeout: 60000 }) }
+        }
     }
 }, { deep: true })
 
@@ -293,7 +308,10 @@ onMounted(async () => {
             triggerName: query.triggerName as string,
             triggerLabel: (query.triggerLabel as string) || query.triggerName as string,
             name: query.name as string,
-            description: (query.description as string) || ''
+            description: (query.description as string) || '',
+            startParams: {
+                timeout: Math.max(1000, Number(query.timeout) || 60000)
+            }
         }
 
         logger.add(LogType.INFO, '工作流信息:', workflowInfo.value)
@@ -385,6 +403,10 @@ async function saveWorkflow() {
             triggerTypeLabel: workflowInfo.value.triggerTypeLabel,
             triggerName: workflowInfo.value.triggerName,
             triggerLabel: workflowInfo.value.triggerLabel,
+            startParams: {
+                ...(workflowInfo.value.startParams || {}),
+                timeout: Math.max(1000, Number(workflowInfo.value.startParams?.timeout) || 60000)
+            },
             enabled: workflowEnabled.value,
             nodes: JSON.parse(JSON.stringify(nodes.value)), // 深拷贝确保数据完整
             edges: JSON.parse(JSON.stringify(edges.value))
@@ -425,7 +447,11 @@ async function loadWorkflowById(id: string) {
                 triggerType: workflow.triggerType,
                 triggerTypeLabel: workflow.triggerTypeLabel,
                 triggerName: workflow.triggerName,
-                triggerLabel: workflow.triggerLabel
+                triggerLabel: workflow.triggerLabel,
+                startParams: {
+                    ...(workflow.startParams || {}),
+                    timeout: Math.max(1000, Number(workflow.startParams?.timeout) || 60000)
+                }
             }
 
             // 恢复启用状态
@@ -631,6 +657,7 @@ const categoryNames: Record<string, string> = {
     logic: '逻辑',
     data: '数据',
     network: '网络',
+    llm: '大模型',
     bot: '机器人',
     flow: '流程',
     custom: '自定义'

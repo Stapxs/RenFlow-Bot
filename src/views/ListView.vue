@@ -284,7 +284,8 @@ const handleCreateWorkflow = async (workflow: any) => {
         triggerName: workflow.triggerName,
         triggerLabel: triggerLabel,
         name: workflow.name,
-        description: workflow.description || ''
+        description: workflow.description || '',
+        timeout: String(Math.max(1000, Number(workflow.timeout) || 60000))
     })
 
     const editUrl = `/edit?${params.toString()}`
@@ -374,7 +375,7 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
         }
     }
 
-    runWorkflowByTrigger(loadedWorkflows, data, { timeout: 60000, bot }, {
+    runWorkflowByTrigger(loadedWorkflows, data, { bot, proxyPort: backend.proxy }, {
         onWorkflowStart: async (workflowId: string): Promise<boolean> => {
             // 如果不是桌面模式，编辑窗口不会接管执行，应当允许工作流继续执行
             if (!backend.isDesktop()) return true
@@ -409,7 +410,7 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                 if (handledPayload && handledPayload.executionData) {
                     try {
                         // 执行来自编辑器的执行数据（只执行该工作流）
-                        await runWorkflowByTrigger([handledPayload.executionData], data, { timeout: 60000, bot }, {
+                        await runWorkflowByTrigger([executionData], data, { bot, proxyPort: backend.proxy }, {
                            onWorkflowStart: async (wfId: string) => {
                                 runningWorkflows.value.add(wfId)
                                 try {
