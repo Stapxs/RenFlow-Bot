@@ -67,6 +67,12 @@ export function useSafeDelete(props: NodeProps) {
             toRemove.add(props.id)
 
             if (current) {
+                const currentType = current.data?.nodeType || current.data?.metadata?.id
+                const pairId = current.data?.pairNodeId
+                if ((currentType === 'loop-start' || currentType === 'loop-end') && pairId) {
+                    toRemove.add(pairId)
+                }
+
                 const incomers = getIncomers(current)
                 for (const inc of incomers) {
                     const isMerge = !!(

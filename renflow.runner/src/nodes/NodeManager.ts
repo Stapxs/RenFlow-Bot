@@ -1,3 +1,5 @@
+import 'reflect-metadata'
+
 import { BaseNode } from './BaseNode.js'
 import { builtinNodes } from './builtin/index.js'
 import { CustomNode } from './custom/CustomNode.js'

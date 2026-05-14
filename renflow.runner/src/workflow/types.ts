@@ -27,6 +27,14 @@ export interface ExecutionNode {
     }
     /** 预期输入个数（用于需要聚合的节点） */
     expectedInputs?: number
+    /** 循环角色 */
+    loopRole?: 'start' | 'end' | 'break'
+    /** 配对循环节点 ID */
+    loopPairId?: string
+    /** 循环体入口 */
+    loopBodyEntry?: string | null
+    /** 循环完成出口 */
+    loopExitNext?: string | null
 }
 
 /**

@@ -5,6 +5,7 @@ import { computed } from 'vue'
 const props = defineProps<EdgeProps>()
 
 const path = computed(() => getSmoothStepPath(props))
+const hidden = computed(() => props.data?.kind === 'loop-pair')
 </script>
 
 <script lang="ts">
@@ -26,9 +27,9 @@ export default {
         </marker>
     </defs>
 
-    <BaseEdge :path="path[0]" marker-end="url(#arrowhead)" />
+    <BaseEdge v-if="!hidden" :path="path[0]" marker-end="url(#arrowhead)" />
 
-    <EdgeLabelRenderer v-if="data.label">
+    <EdgeLabelRenderer v-if="!hidden && data.label">
         <div :style="{
             pointerEvents: 'all',
             position: 'absolute',

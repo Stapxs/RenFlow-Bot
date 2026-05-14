@@ -20,24 +20,13 @@ export class WorkflowConverter {
         this.logger = new Logger('WorkflowConverter')
     }
 
-    /**
-     * 兼容入口：当前自动识别逻辑与标准 Vue Flow 转换一致。
-     * 后续如果存在多种工作流序列化格式，可在这里扩展分流。
-     */
     convertAuto(workflow: VueFlowWorkflow): WorkflowExecution {
         return this.convert(workflow)
     }
 
-    /**
-     * 将 Vue Flow 工作流转换为执行数据
-     * @param vueFlowWorkflow Vue Flow 工作流数据
-     * @returns 执行数据
-     */
     convert(vueFlowWorkflow: VueFlowWorkflow): WorkflowExecution {
-        // 1. 提取触发器配置
-    let trigger = this.extractTrigger(vueFlowWorkflow)
+        let trigger = this.extractTrigger(vueFlowWorkflow)
 
-        // 2. 找到触发器节点
         const triggerNode = vueFlowWorkflow.nodes.find(
             node => node.type === 'trigger' || node.id === 'node-trigger'
         )
@@ -46,8 +35,6 @@ export class WorkflowConverter {
             throw new Error('未找到触发器节点')
         }
 
-        // 如果触发器节点包含额外参数（例如过滤设置、开关等），把它们合并到 trigger.params 中
-        // 这样在执行时可以通过 workflow.trigger.params 访问这些设置
         if (triggerNode.data) {
             const triggerParams = triggerNode.data || {}
             delete triggerParams.metadata
@@ -57,14 +44,10 @@ export class WorkflowConverter {
             }
         }
 
-        // 3. 找到触发器的下一个节点（入口节点）
         const entryNode = this.findEntryNode(triggerNode.id, vueFlowWorkflow.edges)
-
-        // 4. 构建节点映射表
         const nodes = this.buildNodeMap(vueFlowWorkflow.nodes, vueFlowWorkflow.edges)
 
-        // 5. 构建执行数据
-        const execution: WorkflowExecution = {
+        return {
             id: vueFlowWorkflow.id,
             name: vueFlowWorkflow.name,
             description: vueFlowWorkflow.description,
@@ -74,13 +57,8 @@ export class WorkflowConverter {
             createdAt: vueFlowWorkflow.createdAt,
             updatedAt: vueFlowWorkflow.updatedAt
         }
-
-        return execution
     }
 
-    /**
-     * 提取触发器配置
-     */
     private extractTrigger(workflow: VueFlowWorkflow): TriggerConfig {
         return {
             type: workflow.triggerType,
@@ -91,34 +69,30 @@ export class WorkflowConverter {
         }
     }
 
-    /**
-     * 找到入口节点（触发器后的第一个节点）
-     */
     private findEntryNode(triggerNodeId: string, edges: VueFlowEdge[]): string | null {
-        const edge = edges.find(e => e.source === triggerNodeId)
+        const edge = edges.find(e => e.source === triggerNodeId && e.data?.kind !== 'loop-pair')
         return edge ? edge.target : null
     }
 
-    /**
-     * 构建节点映射表
-     */
     private buildNodeMap(
         nodes: VueFlowNode[],
         edges: VueFlowEdge[]
     ): Record<string, ExecutionNode> {
         const nodeMap: Record<string, ExecutionNode> = {}
         const incomingCount: Record<string, number> = {}
-        for (const e of edges) {
+        const pairEdges = edges.filter(edge => edge.data?.kind === 'loop-pair')
+        const normalEdges = edges.filter(edge => edge.data?.kind !== 'loop-pair')
+
+        for (const e of normalEdges) {
             incomingCount[e.target] = (incomingCount[e.target] || 0) + 1
         }
 
-        // 过滤掉触发器节点
         const executionNodes = nodes.filter(
             node => node.type !== 'trigger' && node.id !== 'node-trigger'
         )
 
         for (const node of executionNodes) {
-            const executionNode = this.convertNode(node, edges)
+            const executionNode = this.convertNode(node, normalEdges, pairEdges)
             executionNode.expectedInputs = incomingCount[node.id] || 0
             nodeMap[node.id] = executionNode
         }
@@ -126,20 +100,11 @@ export class WorkflowConverter {
         return nodeMap
     }
 
-    /**
-     * 转换单个节点
-     */
-    private convertNode(node: VueFlowNode, edges: VueFlowEdge[]): ExecutionNode {
-        // 获取节点类型
+    private convertNode(node: VueFlowNode, edges: VueFlowEdge[], pairEdges: VueFlowEdge[]): ExecutionNode {
         const nodeType = node.data.nodeType
-
-        // 获取节点参数
         const params = node.data.params || {}
-
-        // 查找该节点的所有出边
         const outgoingEdges = edges.filter(e => e.source === node.id)
 
-        // 构建基础执行节点
         const executionNode: ExecutionNode = {
             id: node.id,
             type: nodeType!,
@@ -147,39 +112,38 @@ export class WorkflowConverter {
             next: []
         }
 
-        // 处理不同类型的节点
+        if (nodeType === 'loop-start') executionNode.loopRole = 'start'
+        if (nodeType === 'loop-end') executionNode.loopRole = 'end'
+        if (nodeType === 'loop-break') executionNode.loopRole = 'break'
+
+        const pairEdge = pairEdges.find(edge => edge.source === node.id || edge.target === node.id)
+        if (pairEdge) {
+            executionNode.loopPairId = pairEdge.source === node.id ? pairEdge.target : pairEdge.source
+        }
+
         if (this.isConditionalNode(node)) {
-            // 条件节点
             const { branches, regularEdges } = this.buildBranches(outgoingEdges)
-
-            this.logger.debug(
-                `条件节点 ${node.id}: outgoingEdges=${outgoingEdges.length}, ` +
-                `branches=${Object.keys(branches || {}).length}, regularEdges=${regularEdges.length}`
-            )
-
             executionNode.branches = branches
-            // 将不属于分支的边放入 next
             executionNode.next = regularEdges.map(e => e.target)
         } else {
-            // 普通节点：直接连接到下一个节点
             executionNode.next = outgoingEdges.map(e => e.target)
+        }
+
+        if (executionNode.loopRole === 'start') {
+            executionNode.loopBodyEntry = executionNode.next[0] || null
+        }
+        if (executionNode.loopRole === 'end') {
+            executionNode.loopExitNext = executionNode.next[0] || null
         }
 
         return executionNode
     }
 
-    /**
-     * 判断是否为条件节点
-     */
     private isConditionalNode(node: VueFlowNode): boolean {
         const nodeType = node.data.nodeType
         return nodeType === 'ifelse' || nodeType === 'switch'
     }
 
-    /**
-     * 构建条件分支
-     * @returns 分支映射和普通边的数组
-     */
     private buildBranches(edges: VueFlowEdge[]): {
         branches: ExecutionNode['branches']
         regularEdges: VueFlowEdge[]
@@ -188,134 +152,189 @@ export class WorkflowConverter {
         const regularEdges: VueFlowEdge[] = []
 
         for (const edge of edges) {
-            // 检查边是否有分支标识（sourceHandle 或 condition）
             const hasBranchIndicator = edge.sourceHandle || edge.data?.condition
-
-            this.logger.debug(
-                `边 ${edge.id}: source=${edge.source}, target=${edge.target}, ` +
-                `sourceHandle=${edge.sourceHandle || 'undefined'}, ` +
-                `condition=${edge.data?.condition || 'undefined'}`
-            )
-
             if (hasBranchIndicator) {
-                // 这是一个分支边，加入 branches
-                const branchType = this.getBranchType(edge)
-                branches[branchType] = edge.target
-                this.logger.debug(`  -> 归类为分支边，类型: ${branchType}, target: ${edge.target}`)
+                branches[this.getBranchType(edge)] = edge.target
+            } else if (branches.default === undefined) {
+                branches.default = edge.target
             } else {
-                // 条件节点上的无标识边视为默认分支
-                if (branches['default'] === undefined) {
-                    branches['default'] = edge.target
-                    this.logger.debug(`  -> 归类为分支边，类型: default, target: ${edge.target}`)
-                } else {
-                    // 多个无标识边，仍作为普通边进入 next
-                    regularEdges.push(edge)
-                    this.logger.debug('  -> 归类为普通边')
-                }
+                regularEdges.push(edge)
             }
         }
 
         return { branches, regularEdges }
     }
 
-    /**
-     * 获取分支类型
-     */
     private getBranchType(edge: VueFlowEdge): string {
-        // 1. 优先使用 sourceHandle（Vue Flow 中的句柄 ID）
         if (edge.sourceHandle) {
-            // 尝试提取句柄中的分支标识，如 "source-true" -> "true"
             const match = edge.sourceHandle.match(/source-(.+)/)
-            if (match) {
-                return match[1]
-            }
-            // 如果没有 "source-" 前缀，直接使用 sourceHandle 的值
-            // 例如：Handle id="true" 可能直接产生 sourceHandle="true"
+            if (match) return match[1]
             return edge.sourceHandle
         }
 
-        // 2. 使用 edge.data.condition
         if (edge.data?.condition) {
             return edge.data.condition
         }
 
-        // 3. 默认为 "default"
         return 'default'
     }
 
-    /**
-     * 验证执行数据的完整性
-     */
     validate(execution: WorkflowExecution): { valid: boolean; errors: string[]; warnings: string[] } {
         const errors: string[] = []
         const warnings: string[] = []
+        const nodes = execution.nodes
 
-        // 1. 检查是否有入口节点
         if (!execution.entryNode) {
             errors.push('工作流没有入口节点（触发器未连接到任何节点）')
-        } else if (!execution.nodes[execution.entryNode]) {
+        } else if (!nodes[execution.entryNode]) {
             errors.push(`入口节点 ${execution.entryNode} 不存在`)
         }
 
-        // 2. 检查节点引用的完整性
-        for (const [nodeId, node] of Object.entries(execution.nodes)) {
-            // 检查 next 中的节点
-            if (node.next && Array.isArray(node.next)) {
-                for (const nextId of node.next) {
-                    if (nextId && !execution.nodes[nextId]) {
-                        errors.push(`节点 ${nodeId} 引用了不存在的节点: ${nextId}`)
-                    }
+        for (const [nodeId, node] of Object.entries(nodes)) {
+            for (const nextId of node.next || []) {
+                if (nextId && !nodes[nextId]) {
+                    errors.push(`节点 ${nodeId} 引用了不存在的节点: ${nextId}`)
                 }
             }
 
-            // 检查 branches 中的节点
             if (node.branches) {
                 for (const [branchName, targetId] of Object.entries(node.branches)) {
-                    if (targetId && !execution.nodes[targetId]) {
-                        errors.push(
-                            `节点 ${nodeId} 的分支 ${branchName} 引用了不存在的节点: ${targetId}`
-                        )
+                    if (targetId && !nodes[targetId]) {
+                        errors.push(`节点 ${nodeId} 的分支 ${branchName} 引用了不存在的节点: ${targetId}`)
                     }
                 }
             }
         }
 
-        // 3. 检查是否存在孤立节点(没有被任何节点引用,也不是入口节点)
-        // 孤立节点不影响已连接链路执行，仅作为警告返回。
         const referencedNodes = new Set<string>()
-        if (execution.entryNode) {
-            referencedNodes.add(execution.entryNode)
-        }
+        if (execution.entryNode) referencedNodes.add(execution.entryNode)
 
-        for (const node of Object.values(execution.nodes)) {
-            // 检查 next 数组中的节点
-            if (node.next && Array.isArray(node.next)) {
-                for (const nextId of node.next) {
-                    if (nextId && typeof nextId === 'string' && nextId.trim()) {
-                        referencedNodes.add(nextId)
-                    }
+        for (const node of Object.values(nodes)) {
+            for (const nextId of node.next || []) {
+                if (nextId && typeof nextId === 'string' && nextId.trim()) {
+                    referencedNodes.add(nextId)
                 }
             }
-
-            // 检查 branches 对象中的节点
-            if (node.branches && typeof node.branches === 'object') {
-                for (const targetId of Object.values(node.branches)) {
-                    if (targetId && typeof targetId === 'string' && targetId.trim()) {
-                        referencedNodes.add(targetId)
-                    }
+            for (const targetId of Object.values(node.branches || {})) {
+                if (targetId && typeof targetId === 'string' && targetId.trim()) {
+                    referencedNodes.add(targetId)
                 }
             }
         }
 
-        for (const nodeId of Object.keys(execution.nodes)) {
+        for (const nodeId of Object.keys(nodes)) {
             if (!referencedNodes.has(nodeId)) {
-                const node = execution.nodes[nodeId]
-                this.logger.debug(
-                    `孤立节点检测: ${nodeId} (类型: ${node.type}), ` +
-                    `next: [${node.next.join(', ')}], ` +
-                    `branches: ${node.branches ? JSON.stringify(node.branches) : 'null'}`
-                )
                 warnings.push(`节点 ${nodeId} 是孤立节点（未被任何节点引用）`)
+            }
+        }
+
+        const adjacency = this.buildAdjacency(nodes)
+        const loopStarts = Object.values(nodes).filter(node => node.loopRole === 'start')
+        const loopEnds = Object.values(nodes).filter(node => node.loopRole === 'end')
+        const loopBreaks = Object.values(nodes).filter(node => node.loopRole === 'break')
+        const loopBodies = new Map<string, Set<string>>()
+
+        for (const start of loopStarts) {
+            if (!start.loopPairId) {
+                errors.push(`循环开始节点 ${start.id} 缺少配对的循环结束节点`)
+                continue
+            }
+
+            const end = nodes[start.loopPairId]
+            if (!end || end.loopRole !== 'end') {
+                errors.push(`循环开始节点 ${start.id} 的配对节点无效: ${start.loopPairId}`)
+                continue
+            }
+
+            if (end.loopPairId !== start.id) {
+                errors.push(`循环节点 ${start.id} 与 ${end.id} 的配对关系不一致`)
+            }
+            if (start.next.length !== 1) {
+                errors.push(`循环开始节点 ${start.id} 必须且只能有 1 条普通输出边`)
+            }
+            if (end.next.length > 1) {
+                errors.push(`循环结束节点 ${end.id} 最多只能有 1 条普通输出边`)
+            }
+            if (start.next.includes(end.id)) {
+                errors.push(`循环开始节点 ${start.id} 不允许普通直连循环结束节点 ${end.id}`)
+            }
+            if (!start.loopBodyEntry) {
+                errors.push(`循环开始节点 ${start.id} 缺少循环体入口`)
+                continue
+            }
+
+            const bodyNodes = this.collectLoopBodyNodes(start.loopBodyEntry, start.id, end.id, adjacency)
+            loopBodies.set(start.id, bodyNodes)
+
+            const bodyContent = Array.from(bodyNodes).filter(nodeId => {
+                const node = nodes[nodeId]
+                return node && node.id !== end.id && node.loopRole !== 'break'
+            })
+
+            if (bodyContent.length === 0) {
+                errors.push(`循环 ${start.id} 到 ${end.id} 的循环体不能为空`)
+            }
+            if (!bodyNodes.has(end.id)) {
+                errors.push(`循环 ${start.id} 的循环体入口无法到达结束节点 ${end.id}`)
+            }
+
+            for (const nodeId of bodyNodes) {
+                if (nodeId === end.id) continue
+                if (!this.allPathsResolveToLoopEnd(nodeId, start.id, end.id, nodes, adjacency, new Set())) {
+                    errors.push(`循环 ${start.id} 的节点 ${nodeId} 存在无法收敛到 ${end.id} 的路径`)
+                    break
+                }
+            }
+
+            const mode = String(start.params?.mode || 'count')
+            if (mode === 'count') {
+                const count = Number(start.params?.count)
+                if (!Number.isFinite(count) || count < 0) {
+                    errors.push(`循环开始节点 ${start.id} 的 count 必须是大于等于 0 的数值`)
+                }
+            } else if (mode === 'iterate') {
+                if (String(start.params?.source || '').trim() === '') {
+                    errors.push(`循环开始节点 ${start.id} 的遍历来源不能为空`)
+                }
+            } else {
+                errors.push(`循环开始节点 ${start.id} 使用了未知的循环模式: ${mode}`)
+            }
+        }
+
+        for (const end of loopEnds) {
+            if (!end.loopPairId) {
+                errors.push(`循环结束节点 ${end.id} 缺少配对的循环开始节点`)
+                continue
+            }
+            const start = nodes[end.loopPairId]
+            if (!start || start.loopRole !== 'start') {
+                errors.push(`循环结束节点 ${end.id} 的配对节点无效: ${end.loopPairId}`)
+            }
+        }
+
+        for (const breakNode of loopBreaks) {
+            if ((breakNode.next || []).length > 0) {
+                errors.push(`循环跳出节点 ${breakNode.id} 不允许有普通输出边`)
+            }
+            const owners = loopStarts.filter(start => loopBodies.get(start.id)?.has(breakNode.id))
+            if (owners.length === 0) {
+                errors.push(`循环跳出节点 ${breakNode.id} 不能位于循环外`)
+            }
+        }
+
+        for (let i = 0; i < loopStarts.length; i++) {
+            for (let j = i + 1; j < loopStarts.length; j++) {
+                const a = loopStarts[i]
+                const b = loopStarts[j]
+                const aBody = loopBodies.get(a.id) || new Set<string>()
+                const bBody = loopBodies.get(b.id) || new Set<string>()
+                const aContainsBStart = aBody.has(b.id)
+                const aContainsBEnd = b.loopPairId ? aBody.has(b.loopPairId) : false
+                const bContainsAStart = bBody.has(a.id)
+                const bContainsAEnd = a.loopPairId ? bBody.has(a.loopPairId) : false
+                if (aContainsBStart !== aContainsBEnd || bContainsAStart !== bContainsAEnd) {
+                    errors.push(`循环 ${a.id} 与 ${b.id} 的配对结构交叉`)
+                }
             }
         }
 
@@ -324,5 +343,73 @@ export class WorkflowConverter {
             errors,
             warnings
         }
+    }
+
+    private buildAdjacency(nodes: Record<string, ExecutionNode>): Map<string, string[]> {
+        const adjacency = new Map<string, string[]>()
+        for (const node of Object.values(nodes)) {
+            const next = new Set<string>()
+            for (const nextId of node.next || []) {
+                if (nextId) next.add(nextId)
+            }
+            for (const branchTarget of Object.values(node.branches || {})) {
+                if (branchTarget) next.add(branchTarget)
+            }
+            adjacency.set(node.id, Array.from(next))
+        }
+        return adjacency
+    }
+
+    private collectLoopBodyNodes(
+        entryId: string,
+        loopStartId: string,
+        loopEndId: string,
+        adjacency: Map<string, string[]>
+    ): Set<string> {
+        const visited = new Set<string>()
+        const stack = [entryId]
+
+        while (stack.length > 0) {
+            const currentId = stack.pop()!
+            if (visited.has(currentId)) continue
+            visited.add(currentId)
+            if (currentId === loopEndId) continue
+
+            for (const nextId of adjacency.get(currentId) || []) {
+                if (nextId === loopStartId) continue
+                stack.push(nextId)
+            }
+        }
+
+        return visited
+    }
+
+    private allPathsResolveToLoopEnd(
+        nodeId: string,
+        loopStartId: string,
+        loopEndId: string,
+        nodes: Record<string, ExecutionNode>,
+        adjacency: Map<string, string[]>,
+        visiting: Set<string>
+    ): boolean {
+        if (nodeId === loopEndId) return true
+        if (visiting.has(nodeId)) return true
+
+        const node = nodes[nodeId]
+        if (!node) return false
+        if (node.loopRole === 'break') return true
+
+        const nextIds = (adjacency.get(nodeId) || []).filter(nextId => nextId !== loopStartId)
+        if (nextIds.length === 0) return false
+
+        visiting.add(nodeId)
+        for (const nextId of nextIds) {
+            if (!this.allPathsResolveToLoopEnd(nextId, loopStartId, loopEndId, nodes, adjacency, visiting)) {
+                visiting.delete(nodeId)
+                return false
+            }
+        }
+        visiting.delete(nodeId)
+        return true
     }
 }

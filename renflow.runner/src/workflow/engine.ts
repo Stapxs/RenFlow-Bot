@@ -8,76 +8,70 @@ import type { NodeContext, NodeExecutionResult } from '../nodes/types.js'
 import { NodeManager } from '../nodes/NodeManager.js'
 import { Logger } from '../utils/logger.js'
 
-/**
- * 执行上下文
- */
 export interface ExecutionContext {
-    /** 工作流 ID */
     workflowId: string
-    /** 全局状态 */
     globalState: Map<string, any>
-    /** 触发数据（来自触发器的输入） */
     triggerData: any
-    /** 执行日志 */
     logs: ExecutionLog[]
+    loopStack: LoopRuntimeState[]
 }
 
-/**
- * 执行日志
- */
 export interface ExecutionLog {
-    /** 时间戳 */
     timestamp: number
-    /** 节点 ID */
     nodeId: string
-    /** 日志级别 */
     level: 'log' | 'error' | 'warn'
-    /** 日志消息 */
     message: string
-    /** 额外数据 */
     data?: any
 }
 
-/**
- * 执行结果
- */
 export interface WorkflowExecutionResult {
-    /** 是否执行成功 */
     success: boolean
-    /** 错误信息 */
     error?: string
-    /** 执行日志 */
     logs: ExecutionLog[]
-    /** 最终状态 */
     finalState: Map<string, any>
 }
 
-/**
- * 执行状态回调
- */
 export interface ExecutionCallback {
-    /** 节点开始执行 */
     onNodeStart?: (nodeId: string, nodeType: string, input: any) => void | Promise<void>
-    /** 节点执行完成 */
     onNodeComplete?: (nodeId: string, result: NodeExecutionResult) => void | Promise<void>
-    /** 节点执行失败 */
     onNodeError?: (nodeId: string, error: Error) => void | Promise<void>
-    /** 工作流执行完成 */
     onWorkflowComplete?: (result: WorkflowExecutionResult) => void | Promise<void>
 }
 
-/**
- * 执行选项
- */
 export interface ExecutionOptions {
-    /** 每个节点的最小执行延迟（毫秒），用于可视化 */
     minDelay?: number
-    /** 执行超时时间（毫秒） */
     timeout?: number
-    /** 状态回调 */
     callback?: ExecutionCallback
-    /** 初始全局变量（会被复制到 ExecutionContext.globalState），可在此传入 bot 等对象 */
     initialGlobals?: Record<string, any>
+}
+
+interface LoopRuntimeItem {
+    mode: 'count' | 'iterate'
+    index: number
+    iteration: number
+    count: number
+    isFirst: boolean
+    isLast: boolean
+    item: any
+    key?: string
+    value?: any
+}
+
+interface LoopRuntimeState {
+    startId: string
+    endId: string
+    bodyEntry: string
+    exitNext: string | null
+    originalInput: any
+    resultMode: 'collect' | 'last'
+    items: LoopRuntimeItem[]
+    results: any[]
+    broken: boolean
+    currentIteration: number
+    iterationCompleted: boolean
+    iterationOutput: any
+    endArrivals: any[]
+    endExpected: number
 }
 
 export class WorkflowEngine {
@@ -91,13 +85,6 @@ export class WorkflowEngine {
         this.pendingMerge = new Map()
     }
 
-    /**
-     * 执行工作流
-     * @param workflow 工作流执行数据
-     * @param triggerData 触发数据
-     * @param options 执行选项
-     * @returns 执行结果
-     */
     async execute(
         workflow: WorkflowExecution,
         triggerData: any = null,
@@ -105,30 +92,26 @@ export class WorkflowEngine {
     ): Promise<WorkflowExecutionResult> {
         this.logger.info(`开始执行工作流: ${workflow.name} (${workflow.id})`)
 
-        // 创建执行上下文
         const context: ExecutionContext = {
             workflowId: workflow.id,
             globalState: new Map(),
             triggerData,
-            logs: []
+            logs: [],
+            loopStack: []
         }
 
-        // 如果有初始全局变量，注入到 globalState
         if (options.initialGlobals) {
             for (const [k, v] of Object.entries(options.initialGlobals)) {
                 context.globalState.set(k, v)
             }
         }
 
-        // 请通过 options.initialGlobals 传入 bot 或其他初始全局对象，例如: { initialGlobals: { bot: myBot } }
-        // 如果执行时包含触发数据，把触发数据写入全局存储，键名为 'trigger'
         if (context.triggerData !== undefined && context.triggerData !== null) {
             context.globalState.set('trigger', context.triggerData)
         }
 
         const executePromise = this.executeInternal(workflow, context, options)
 
-        // 如果设置了超时，使用 Promise.race
         if (options.timeout && options.timeout > 0) {
             const timeoutPromise = new Promise<WorkflowExecutionResult>((_, reject) => {
                 setTimeout(() => reject(new Error(`执行超时 (${options.timeout}ms)`)), options.timeout)
@@ -138,15 +121,12 @@ export class WorkflowEngine {
                 return await Promise.race([executePromise, timeoutPromise])
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error)
-                this.logger.error(`工作流执行失败 > ${errorMessage}`)
-
                 const result: WorkflowExecutionResult = {
                     success: false,
                     error: errorMessage,
                     logs: context.logs,
                     finalState: context.globalState
                 }
-
                 await options.callback?.onWorkflowComplete?.(result)
                 return result
             }
@@ -155,44 +135,29 @@ export class WorkflowEngine {
         return executePromise
     }
 
-    /**
-     * 内部执行方法
-     */
     private async executeInternal(
         workflow: WorkflowExecution,
         context: ExecutionContext,
         options: ExecutionOptions
     ): Promise<WorkflowExecutionResult> {
         try {
-            // 检查入口节点
             if (!workflow.entryNode) {
                 throw new Error('工作流没有入口节点')
             }
 
-            // 从入口节点开始执行
-            await this.executeNode(
-                workflow.entryNode,
-                context.triggerData,
-                workflow,
-                context,
-                options
-            )
-
-            this.logger.info(`工作流执行完成: ${workflow.name}`)
+            await this.executeNode(workflow.entryNode, context.triggerData, workflow, context, options)
 
             const result: WorkflowExecutionResult = {
                 success: true,
                 logs: context.logs,
                 finalState: context.globalState
             }
-
             await options.callback?.onWorkflowComplete?.(result)
             return result
         } catch (error) {
-            this.logger.error(`工作流执行失败 > ${error as unknown as Error}`)
-
             const result: WorkflowExecutionResult = {
                 success: false,
+                error: error instanceof Error ? error.message : String(error),
                 logs: context.logs,
                 finalState: context.globalState
             }
@@ -207,9 +172,6 @@ export class WorkflowEngine {
         }
     }
 
-    /**
-     * 执行单个节点
-     */
     private async executeNode(
         nodeId: string,
         input: any,
@@ -223,33 +185,34 @@ export class WorkflowEngine {
         }
 
         const startTime = Date.now()
-
-        this.logger.info(`执行节点: ${nodeId} (${node.type})`)
-
-        // 触发节点开始回调
         await options.callback?.onNodeStart?.(nodeId, node.type, input)
 
-        // 创建节点上下文
         const nodeContext: NodeContext = {
             nodeId: node.id,
             nodeType: node.type,
             globalState: context.globalState,
             logger: {
-                log: (...args: any[]) => {
-                    this.addLog(context, nodeId, 'log', args.join(' '))
-                },
-                error: (...args: any[]) => {
-                    this.addLog(context, nodeId, 'error', args.join(' '))
-                },
-                warn: (...args: any[]) => {
-                    this.addLog(context, nodeId, 'warn', args.join(' '))
-                }
+                log: (...args: any[]) => this.addLog(context, nodeId, 'log', args.join(' ')),
+                error: (...args: any[]) => this.addLog(context, nodeId, 'error', args.join(' ')),
+                warn: (...args: any[]) => this.addLog(context, nodeId, 'warn', args.join(' '))
             }
         }
 
-        let result: NodeExecutionResult
-
         try {
+            if (node.loopRole === 'start') {
+                await this.handleLoopStart(node, input, workflow, context, options, startTime)
+                return
+            }
+            if (node.loopRole === 'end') {
+                await this.handleLoopEnd(node, input, context, options, startTime)
+                return
+            }
+            if (node.loopRole === 'break') {
+                await this.handleLoopBreak(node, input, context, options, startTime)
+                return
+            }
+
+            let result: NodeExecutionResult
             if (node.type === 'merge' && String(node.params?.mode || 'ANY').toUpperCase() === 'ALL') {
                 const expected = typeof node.expectedInputs === 'number' ? node.expectedInputs : 0
                 const state = this.pendingMerge.get(nodeId) || { inputs: [], expected, executed: false, params: node.params }
@@ -263,17 +226,11 @@ export class WorkflowEngine {
                         try {
                             clearTimeout(state.timer)
                         } catch (_error) {
-                            // ignore timer cleanup failure
+                            // ignore
                         }
                         state.timer = undefined
                     }
-                    result = await this.nodeManager.executeNode(
-                        node.id,
-                        node.type,
-                        state.inputs,
-                        state.params,
-                        nodeContext
-                    )
+                    result = await this.nodeManager.executeNode(node.id, node.type, state.inputs, state.params, nodeContext)
                 } else {
                     const timeout = Number(node.params?.timeout || 0)
                     const behavior = String(node.params?.timeoutBehavior || 'execute')
@@ -286,14 +243,8 @@ export class WorkflowEngine {
                                 if (behavior === 'throw') {
                                     throw new Error(`合并节点等待超时: 已收到 ${cur.inputs.length}/${cur.expected}`)
                                 }
-                                result = await this.nodeManager.executeNode(
-                                    node.id,
-                                    node.type,
-                                    cur.inputs,
-                                    cur.params,
-                                    nodeContext
-                                )
-                                await this.afterNodeSuccess(nodeId, node, result, workflow, context, options, startTime)
+                                const timeoutResult = await this.nodeManager.executeNode(node.id, node.type, cur.inputs, cur.params, nodeContext)
+                                await this.afterNodeSuccess(nodeId, node, timeoutResult, workflow, context, options, startTime)
                             } catch (err) {
                                 await options.callback?.onNodeError?.(nodeId, err as Error)
                             }
@@ -303,35 +254,23 @@ export class WorkflowEngine {
                     return
                 }
             } else {
-                result = await this.nodeManager.executeNode(
-                    node.id,
-                    node.type,
-                    input,
-                    node.params,
-                    nodeContext
-                )
+                result = await this.nodeManager.executeNode(node.id, node.type, input, node.params, nodeContext)
             }
+
+            if (!result.success) {
+                const err = new Error(`节点执行失败 > ${result.error}`)
+                await options.callback?.onNodeError?.(nodeId, err)
+                throw err
+            }
+
+            await this.afterNodeSuccess(nodeId, node, result, workflow, context, options, startTime)
         } catch (error) {
-            // 触发节点错误回调
-            const err = error as unknown as Error
+            const err = error as Error
             await options.callback?.onNodeError?.(nodeId, err)
             throw error
         }
-
-        // 记录执行结果
-        if (!result.success) {
-            // 触发节点错误回调
-            const err = new Error(`节点执行失败 > ${result.error}`)
-            await options.callback?.onNodeError?.(nodeId, err)
-            throw err
-        }
-
-        await this.afterNodeSuccess(nodeId, node, result, workflow, context, options, startTime)
     }
 
-    /**
-     * 执行下一个节点
-     */
     private async executeNextNodes(
         node: ExecutionNode,
         result: NodeExecutionResult,
@@ -339,19 +278,13 @@ export class WorkflowEngine {
         context: ExecutionContext,
         options: ExecutionOptions
     ): Promise<void> {
-        // 如果是条件节点，根据结果选择分支
         if (node.branches) {
             await this.executeBranch(node, result, workflow, context, options)
         } else if (node.next.length > 0) {
-            // 普通节点：并行执行所有下一个节点（非列队）
-            // 使用 Promise.all 保证并行执行并在任一子任务抛出错误时向上抛出
-            const executions = node.next.map(nextId =>
-                this.executeNode(nextId, result.output, workflow, context, options)
+            await Promise.all(
+                node.next.map(nextId => this.executeNode(nextId, result.output, workflow, context, options))
             )
-
-            await Promise.all(executions)
         }
-        // 如果 next 为空，说明到达流程终点
     }
 
     private async afterNodeSuccess(
@@ -368,14 +301,250 @@ export class WorkflowEngine {
         if (minDelay > elapsed) {
             await this.delay(minDelay - elapsed)
         }
-        this.logger.info(`节点执行成功: ${nodeId}`)
         await options.callback?.onNodeComplete?.(nodeId, result)
         await this.executeNextNodes(node, result, workflow, context, options)
     }
 
-    /**
-     * 执行条件分支
-     */
+    private async handleLoopStart(
+        node: ExecutionNode,
+        input: any,
+        workflow: WorkflowExecution,
+        context: ExecutionContext,
+        options: ExecutionOptions,
+        startTime: number
+    ): Promise<void> {
+        if (!node.loopPairId || !node.loopBodyEntry) {
+            throw new Error(`循环开始节点配置不完整: ${node.id}`)
+        }
+
+        const endNode = workflow.nodes[node.loopPairId]
+        if (!endNode) {
+            throw new Error(`循环开始节点 ${node.id} 缺少结束节点 ${node.loopPairId}`)
+        }
+
+        const state: LoopRuntimeState = {
+            startId: node.id,
+            endId: endNode.id,
+            bodyEntry: node.loopBodyEntry,
+            exitNext: endNode.loopExitNext || null,
+            originalInput: input,
+            resultMode: String(node.params?.resultMode || 'collect') === 'last' ? 'last' : 'collect',
+            items: this.buildLoopItems(node, input),
+            results: [],
+            broken: false,
+            currentIteration: -1,
+            iterationCompleted: false,
+            iterationOutput: undefined,
+            endArrivals: [],
+            endExpected: Math.max(1, Number(endNode.expectedInputs || 1))
+        }
+
+        const elapsed = Date.now() - startTime
+        const minDelay = options.minDelay || 0
+        if (minDelay > elapsed) {
+            await this.delay(minDelay - elapsed)
+        }
+        await options.callback?.onNodeComplete?.(node.id, { success: true, output: input })
+
+        context.loopStack.push(state)
+        try {
+            for (let index = 0; index < state.items.length; index++) {
+                state.currentIteration = index
+                state.iterationCompleted = false
+                state.iterationOutput = undefined
+                state.endArrivals = []
+
+                await this.executeNode(
+                    state.bodyEntry,
+                    this.buildLoopInput(state.originalInput, state.items[index]),
+                    workflow,
+                    context,
+                    options
+                )
+
+                if (!state.iterationCompleted) {
+                    throw new Error(`循环 ${node.id} 的第 ${index + 1} 轮未到达循环结束节点`)
+                }
+
+                state.results.push(state.iterationOutput)
+                if (state.broken) break
+            }
+        } finally {
+            context.loopStack.pop()
+        }
+
+        const finalOutput = this.buildLoopOutput(state)
+        if (state.exitNext) {
+            await this.executeNode(state.exitNext, finalOutput, workflow, context, options)
+        }
+    }
+
+    private async handleLoopEnd(
+        node: ExecutionNode,
+        input: any,
+        context: ExecutionContext,
+        options: ExecutionOptions,
+        startTime: number
+    ): Promise<void> {
+        const state = this.findLoopStateByEnd(context, node.id)
+        if (!state) {
+            throw new Error(`循环结束节点 ${node.id} 不在有效循环上下文中`)
+        }
+
+        state.endArrivals.push(input)
+        if (!state.broken && state.endArrivals.length < state.endExpected) {
+            return
+        }
+
+        state.iterationCompleted = true
+        state.iterationOutput = state.endArrivals[state.endArrivals.length - 1]
+
+        const elapsed = Date.now() - startTime
+        const minDelay = options.minDelay || 0
+        if (minDelay > elapsed) {
+            await this.delay(minDelay - elapsed)
+        }
+
+        await options.callback?.onNodeComplete?.(node.id, {
+            success: true,
+            output: this.buildLoopOutput(state)
+        })
+    }
+
+    private async handleLoopBreak(
+        node: ExecutionNode,
+        input: any,
+        context: ExecutionContext,
+        options: ExecutionOptions,
+        startTime: number
+    ): Promise<void> {
+        const state = context.loopStack[context.loopStack.length - 1]
+        if (!state) {
+            throw new Error(`循环跳出节点 ${node.id} 不在循环体内`)
+        }
+
+        state.broken = true
+        state.iterationCompleted = true
+        state.iterationOutput = input
+        state.endArrivals = [input]
+
+        const elapsed = Date.now() - startTime
+        const minDelay = options.minDelay || 0
+        if (minDelay > elapsed) {
+            await this.delay(minDelay - elapsed)
+        }
+
+        await options.callback?.onNodeComplete?.(node.id, {
+            success: true,
+            output: input
+        })
+    }
+
+    private findLoopStateByEnd(context: ExecutionContext, endId: string): LoopRuntimeState | undefined {
+        for (let i = context.loopStack.length - 1; i >= 0; i--) {
+            const state = context.loopStack[i]
+            if (state.endId === endId) return state
+        }
+        return undefined
+    }
+
+    private buildLoopItems(node: ExecutionNode, input: any): LoopRuntimeItem[] {
+        const mode = String(node.params?.mode || 'count')
+        if (mode === 'iterate') {
+            const source = this.resolveSource(node.params?.source, input)
+            if (Array.isArray(source)) {
+                return source.map((item, index) => ({
+                    mode: 'iterate',
+                    index,
+                    iteration: index + 1,
+                    count: source.length,
+                    isFirst: index === 0,
+                    isLast: index === source.length - 1,
+                    item
+                }))
+            }
+            if (source && typeof source === 'object') {
+                const entries = Object.entries(source)
+                return entries.map(([key, value], index) => ({
+                    mode: 'iterate',
+                    index,
+                    iteration: index + 1,
+                    count: entries.length,
+                    isFirst: index === 0,
+                    isLast: index === entries.length - 1,
+                    item: value,
+                    key,
+                    value
+                }))
+            }
+            return []
+        }
+
+        const count = Math.max(0, Number(node.params?.count || 0))
+        return Array.from({ length: count }, (_, index) => ({
+            mode: 'count',
+            index,
+            iteration: index + 1,
+            count,
+            isFirst: index === 0,
+            isLast: index === count - 1,
+            item: index
+        }))
+    }
+
+    private resolveSource(source: any, input: any): any {
+        if (source === undefined || source === null) return undefined
+        if (typeof source !== 'string') return source
+
+        const normalized = source.trim().replace(/\[(\d+)\]/g, '.$1')
+        if (!normalized) return undefined
+
+        let current: any = input
+        for (const part of normalized.split('.')) {
+            if (part === 'input') continue
+            if (current === undefined || current === null) return undefined
+            current = current[part]
+        }
+        return current
+    }
+
+    private buildLoopInput(originalInput: any, item: LoopRuntimeItem): any {
+        const loop = {
+            mode: item.mode,
+            index: item.index,
+            iteration: item.iteration,
+            count: item.count,
+            isFirst: item.isFirst,
+            isLast: item.isLast,
+            item: item.item,
+            ...(item.key !== undefined ? { key: item.key } : {}),
+            ...(item.value !== undefined ? { value: item.value } : {})
+        }
+
+        if (originalInput && typeof originalInput === 'object' && !Array.isArray(originalInput)) {
+            return { ...originalInput, loop }
+        }
+
+        return { input: originalInput, loop }
+    }
+
+    private buildLoopOutput(state: LoopRuntimeState): any {
+        const lastResult = state.results.length > 0
+            ? state.results[state.results.length - 1]
+            : state.iterationOutput
+
+        return {
+            results: state.resultMode === 'collect' ? state.results : [],
+            result: lastResult,
+            loopSummary: {
+                mode: state.items[0]?.mode || 'count',
+                completed: state.results.length,
+                total: state.items.length,
+                broken: state.broken
+            }
+        }
+    }
+
     private async executeBranch(
         node: ExecutionNode,
         result: NodeExecutionResult,
@@ -385,46 +554,32 @@ export class WorkflowEngine {
     ): Promise<void> {
         if (!node.branches) return
 
-        // 根据节点类型处理分支
         if (node.type === 'ifelse') {
-            // ifelse 节点：根据输出的布尔值选择分支
             const condition = result.output._branch
             const branchKey = condition ? 'true' : 'false'
             const nextNodeId = node.branches[branchKey]
 
             if (nextNodeId) {
                 await this.executeNode(nextNodeId, result.output, workflow, context, options)
-            } else {
-                const defaultNext = node.branches['default']
-                if (defaultNext) {
-                    await this.executeNode(defaultNext, result.output, workflow, context, options)
-                } else {
-                    this.logger.info(`分支 ${branchKey} 没有连接节点，流程结束`)
-                }
+            } else if (node.branches.default) {
+                await this.executeNode(node.branches.default, result.output, workflow, context, options)
             }
         } else {
-            // 其他条件节点：使用 output 作为分支键
-            const branchKey = (result.output && result.output._branchKey !== undefined)? String(result.output._branchKey): String(result.output)
-            const nextNodeId = node.branches[branchKey] || node.branches['default']
+            const branchKey = (result.output && result.output._branchKey !== undefined)
+                ? String(result.output._branchKey)
+                : String(result.output)
+            const nextNodeId = node.branches[branchKey] || node.branches.default
 
             if (nextNodeId) {
                 await this.executeNode(nextNodeId, result.output, workflow, context, options)
-            } else {
-                if (node.next && node.next.length > 0) {
-                    const executions = node.next.map(nextId =>
-                        this.executeNode(nextId, result.output, workflow, context, options)
-                    )
-                    await Promise.all(executions)
-                } else {
-                    this.logger.info(`没有匹配的分支: ${branchKey}，流程结束`)
-                }
+            } else if (node.next && node.next.length > 0) {
+                await Promise.all(
+                    node.next.map(nextId => this.executeNode(nextId, result.output, workflow, context, options))
+                )
             }
         }
     }
 
-    /**
-     * 添加执行日志
-     */
     private addLog(
         context: ExecutionContext,
         nodeId: string,
@@ -441,9 +596,6 @@ export class WorkflowEngine {
         })
     }
 
-    /**
-     * 延迟函数
-     */
     private delay(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms))
     }

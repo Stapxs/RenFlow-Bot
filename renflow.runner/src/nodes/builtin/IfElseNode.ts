@@ -63,6 +63,18 @@ export class IfElseNode extends BaseNode {
 
         try {
             let result = false
+            const resolvePath = (source: any, path: string) => {
+                if (!path) return source
+                const normalized = path.replace(/\[(\d+)\]/g, '.$1')
+                const parts = normalized.split('.').filter(Boolean)
+                let current = source
+                for (const part of parts) {
+                    if (part === 'input') continue
+                    if (current === undefined || current === null) return undefined
+                    current = current[part]
+                }
+                return current
+            }
 
             // 获取参数值
             let paramValue: any
@@ -73,9 +85,7 @@ export class IfElseNode extends BaseNode {
                 result = Boolean(await conditionFunc(input, context))
             } else {
                 // 标准参数比较
-                // 解析参数路径 (例如: "input.value" 或 "input")
-                const paramPath = condition.parameter.split('.')[1]
-                paramValue = input?.[paramPath]
+                paramValue = resolvePath(input, condition.parameter || 'input')
 
                 // 根据模式判断
                 switch (condition.mode) {

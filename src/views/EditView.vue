@@ -61,6 +61,10 @@
                 <MergeNodeVue v-bind="mergeNodeProps" />
             </template>
 
+            <template #node-loop-end="loopEndNodeProps">
+                <MergeNodeVue v-bind="loopEndNodeProps" />
+            </template>
+
             <template #edge-base="baseEdgeProps">
                 <BaseEdge v-bind="baseEdgeProps" />
             </template>
@@ -85,6 +89,23 @@
                                 <a>{{ item.description }}</a>
                             </div>
                         </div>
+                    </div>
+                </div>
+                <div icon="fa-triangle-exclamation" class="workflow-validation">
+                    <div v-if="validationErrors.length === 0 && validationWarnings.length === 0" class="validation-empty">
+                        当前没有结构问题
+                    </div>
+                    <div v-if="validationErrors.length > 0" class="validation-block validation-error">
+                        <strong>结构错误</strong>
+                        <ul>
+                            <li v-for="item in validationErrors" :key="item">{{ item }}</li>
+                        </ul>
+                    </div>
+                    <div v-if="validationWarnings.length > 0" class="validation-block validation-warning">
+                        <strong>结构警告</strong>
+                        <ul>
+                            <li v-for="item in validationWarnings" :key="item">{{ item }}</li>
+                        </ul>
                     </div>
                 </div>
                 <div icon="fa-info-circle" class="flow-info">
@@ -184,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { LogLevel, init, nodeManager as runnerNodeManager, BaseRenMessage } from 'renflow-runner'
+import { LogLevel, init, nodeManager as runnerNodeManager, BaseRenMessage, WorkflowConverter } from 'renflow-runner'
 
 import { MergeNode, type NodeMetadata } from 'renflow-runner'
 import type { Node, Edge } from '@vue-flow/core'
@@ -246,9 +267,73 @@ const editingFlow = ref<boolean>(false)
 const workflowEnabled = ref<boolean>(false)
 const showActivityPreview = ref<boolean>(false)
 const activityPreviewRef = ref<any>(null)
+const validationErrors = ref<string[]>([])
+const validationWarnings = ref<string[]>([])
+const workflowConverter = new WorkflowConverter()
 
 function openActivityPreview() {
     showActivityPreview.value = true
+}
+
+const LOOP_PAIR_SPACING_X = 260
+const LOOP_PAIR_KIND = 'loop-pair'
+
+function resolveNodeRenderType(nodeType?: string, fallbackType?: string) {
+    if (nodeType === 'loop-end') {
+        return nodeType
+    }
+    if (nodeType) {
+        return getExNodeTypes(nodeType)
+    }
+    return fallbackType || 'base'
+}
+
+function createWorkflowSnapshot(): WorkflowData {
+    return {
+        id: workflowInfo.value.id || '',
+        name: workflowInfo.value.name || '',
+        description: workflowInfo.value.description || '',
+        triggerType: workflowInfo.value.triggerType || '',
+        triggerTypeLabel: workflowInfo.value.triggerTypeLabel || '',
+        triggerName: workflowInfo.value.triggerName || '',
+        triggerLabel: workflowInfo.value.triggerLabel || '',
+        startParams: {
+            ...(workflowInfo.value.startParams || {}),
+            timeout: Math.max(1000, Number(workflowInfo.value.startParams?.timeout) || 60000)
+        },
+        enabled: workflowEnabled.value,
+        nodes: JSON.parse(JSON.stringify(nodes.value)),
+        edges: JSON.parse(JSON.stringify(edges.value)),
+        createdAt: Number(workflowInfo.value.createdAt || Date.now()),
+        updatedAt: Date.now()
+    }
+}
+
+function validateCurrentWorkflow() {
+    try {
+        const execution = workflowConverter.convert(createWorkflowSnapshot() as any)
+        const result = workflowConverter.validate(execution)
+        validationErrors.value = result.errors
+        validationWarnings.value = result.warnings
+        return result
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        validationErrors.value = [message]
+        validationWarnings.value = []
+        return {
+            valid: false,
+            errors: [message],
+            warnings: []
+        }
+    }
+}
+
+function syncValidationState(showToast = false) {
+    const result = validateCurrentWorkflow()
+    if (showToast && result.errors.length > 0) {
+        toast.error(result.errors[0])
+    }
+    return result
 }
 
 // 初始化 renflow-runner（集中初始化入口）
@@ -395,22 +480,7 @@ onMounted(async () => {
  */
 async function saveWorkflow() {
     try {
-        const workflowData: Partial<WorkflowData> = {
-            id: workflowInfo.value.id,
-            name: workflowInfo.value.name,
-            description: workflowInfo.value.description,
-            triggerType: workflowInfo.value.triggerType,
-            triggerTypeLabel: workflowInfo.value.triggerTypeLabel,
-            triggerName: workflowInfo.value.triggerName,
-            triggerLabel: workflowInfo.value.triggerLabel,
-            startParams: {
-                ...(workflowInfo.value.startParams || {}),
-                timeout: Math.max(1000, Number(workflowInfo.value.startParams?.timeout) || 60000)
-            },
-            enabled: workflowEnabled.value,
-            nodes: JSON.parse(JSON.stringify(nodes.value)), // 深拷贝确保数据完整
-            edges: JSON.parse(JSON.stringify(edges.value))
-        }
+        const workflowData: Partial<WorkflowData> = createWorkflowSnapshot()
 
         const saved = await WorkflowStorage.save(workflowData)
         workflowInfo.value.id = saved.id
@@ -460,8 +530,14 @@ async function loadWorkflowById(id: string) {
             // 确保完整恢复节点和边数据（通过 applyWithoutHistory 避免在加载时产生历史记录）
             applyWithoutHistory(() => {
                 nodes.value = (workflow.nodes || []).map((n: any) => {
-                    const isMerge = (n && ((n.data && n.data.nodeType === 'merge') || (n.data && n.data.metadata && n.data.metadata.id === 'merge') || n.type === getExNodeTypes('merge')))
-                    return { ...n, draggable: isMerge ? false : (n.draggable ?? true), class: isMerge ? 'no-transition' : (n.class ?? '') }
+                    const nodeType = n?.data?.nodeType || n?.data?.metadata?.id
+                    const fixed = nodeType === 'merge'
+                    return {
+                        ...n,
+                        type: resolveNodeRenderType(nodeType, n.type),
+                        draggable: fixed ? false : (n.draggable ?? true),
+                        class: fixed ? 'no-transition' : (n.class ?? '')
+                    }
                 })
                 edges.value = workflow.edges || []
                 // 清空历史栈并建立初始快照
@@ -476,6 +552,7 @@ async function loadWorkflowById(id: string) {
             // 使用 Toast 通知
             toast.success(`工作流已加载: ${workflow.name}`)
             logger.add(LogType.INFO, '工作流已加载完成，当前 nodes.value:', nodes.value)
+            syncValidationState()
         } else {
             toast.error('工作流不存在')
         }
@@ -496,9 +573,18 @@ async function executeWorkflow() {
             return
         }
 
+        const enabling = !workflowEnabled.value
+        if (enabling) {
+            const validation = syncValidationState(true)
+            if (!validation.valid) {
+                return
+            }
+        }
+
         // 如果还没有 ID，先保存工作流以获得 ID
         if (!workflowInfo.value.id) {
             await saveWorkflow()
+            if (!workflowInfo.value.id) return
         }
 
         const id = workflowInfo.value.id as string
@@ -683,6 +769,14 @@ const filteredNodes = computed(() => {
 // 节点和边数据
 const nodes = ref<Node[]>([])
 const edges = ref<Edge[]>([])
+
+watch([nodes, edges], () => {
+    syncValidationState()
+}, { deep: true })
+
+watch(workflowInfo, () => {
+    syncValidationState()
+}, { deep: true })
 
 // ---- undo/redo 历史管理 ----
 const undoStack = ref<any[]>([])
@@ -1042,6 +1136,66 @@ function correctUpstreamMergeNodes(nodeId: string, targetPos?: { x: number; y: n
     }
 }
 
+function createLoopPairNodes(position: { x: number; y: number }, metadata: NodeMetadata) {
+    const startId = `node-${nodeIdCounter++}`
+    const endId = `node-${nodeIdCounter++}`
+    const endMeta = runnerNodeManager.getNodeMetadata('loop-end')
+    if (!endMeta) {
+        throw new Error('未找到 loop-end 节点定义')
+    }
+
+    const startNode: Node = {
+        id: startId,
+        type: getExNodeTypes('loop-start'),
+        position,
+        draggable: true,
+        data: {
+            label: metadata.name,
+            nodeType: 'loop-start',
+            metadata,
+            pairNodeId: endId,
+            params: {}
+        }
+    }
+
+    const endNode: Node = {
+        id: endId,
+        type: 'loop-end',
+        position: {
+            x: position.x + LOOP_PAIR_SPACING_X,
+            y: position.y
+        },
+        draggable: true,
+        data: {
+            label: endMeta.name,
+            nodeType: 'loop-end',
+            metadata: endMeta,
+            pairNodeId: startId,
+            params: {}
+        }
+    }
+
+    const pairEdge: Edge = {
+        id: `edge-${startId}-${endId}-pair`,
+        source: startId,
+        target: endId,
+        type: 'base',
+        animated: false,
+        selectable: false,
+        deletable: false,
+        focusable: false,
+        style: {
+            opacity: 0,
+            pointerEvents: 'none'
+        },
+        data: {
+            kind: LOOP_PAIR_KIND
+        }
+    } as any
+
+    return { startNode, endNode, pairEdge }
+}
+
 // 拖拽状态
 const draggedNodeType = ref<NodeMetadata | null>(null)
 
@@ -1080,24 +1234,27 @@ function onDrop(event: DragEvent) {
         y: event.clientY
     })
 
-    // 创建新节点
-    const newNode: Node = {
-        id: `node-${nodeIdCounter++}`,
-        type: getExNodeTypes(draggedNodeType.value.id),
-        position,
-        // 如果拖拽的是 merge 类型，创建到画布后禁止拖动
-        draggable: draggedNodeType.value.id === 'merge' ? false : true,
-        class: draggedNodeType.value.id === 'merge' ? 'no-transition' : undefined,
-        data: {
-            label: draggedNodeType.value.name,
-            nodeType: draggedNodeType.value.id,
-            metadata: draggedNodeType.value,
-            params: {}
+    if (draggedNodeType.value.id === 'loop-start') {
+        const { startNode, endNode, pairEdge } = createLoopPairNodes(position, draggedNodeType.value)
+        addNodes([startNode, endNode])
+        addEdges([pairEdge])
+    } else {
+        const newNode: Node = {
+            id: `node-${nodeIdCounter++}`,
+            type: getExNodeTypes(draggedNodeType.value.id),
+            position,
+            draggable: draggedNodeType.value.id === 'merge' ? false : true,
+            class: draggedNodeType.value.id === 'merge' ? 'no-transition' : undefined,
+            data: {
+                label: draggedNodeType.value.name,
+                nodeType: draggedNodeType.value.id,
+                metadata: draggedNodeType.value,
+                params: {}
+            }
         }
-    }
 
-    // 添加节点到画布
-    addNodes([newNode])
+        addNodes([newNode])
+    }
 
     // 清除拖拽状态
     draggedNodeType.value = null
@@ -1246,19 +1403,40 @@ onUnmounted(() => {
  * 处理连接事件
  */
 function onConnect(params: any) {
+    const sourceNode = findNode(params.source)
+    const targetNode = findNode(params.target)
+    const sourceType = sourceNode?.data?.nodeType || sourceNode?.data?.metadata?.id
+    const targetType = targetNode?.data?.nodeType || targetNode?.data?.metadata?.id
+
+    if (!sourceNode || !targetNode) {
+        return
+    }
+
+    if (params.data?.kind === LOOP_PAIR_KIND) {
+        return
+    }
+
+    if (sourceType === 'loop-end' && targetType === 'loop-start') {
+        toast.error('循环结束节点不能直接连接到另一个循环开始节点')
+        return
+    }
+    if (sourceType === 'loop-start' && targetType === 'loop-end' && sourceNode.data?.pairNodeId === targetNode.id) {
+        toast.error('循环开始节点不能直接连接配对的循环结束节点')
+        return
+    }
+    if (sourceType === 'loop-break') {
+        toast.error('跳出循环节点不允许连接下游节点')
+        return
+    }
+
     // 连接线右边的 node 已连接的线段数
     const inputCount = edges.value.filter(
-        e => e.target === params.target
+        e => e.target === params.target && e.data?.kind !== LOOP_PAIR_KIND
     ).length
     // 连接线左边的 node 已连接的线段数
     const outputCount = edges.value.filter(
-        e => e.source === params.source
+        e => e.source === params.source && e.data?.kind !== LOOP_PAIR_KIND
     ).length
-
-    // 连接线右边的 node
-    const targetNode = findNode(params.target)
-    // 连接线左边的 node
-    const sourceNode = findNode(params.source)
 
     // 连接线右边的 node 的最大连接数
     const maxInputCount = targetNode?.data?.metadata?.maxInput || 1
@@ -1335,6 +1513,9 @@ function onConnect(params: any) {
  * 处理边双击事件，删除边
  */
 function onEdgeDoubleClick({ edge }: { edge: Edge }) {
+    if (edge.data?.kind === LOOP_PAIR_KIND) {
+        return
+    }
     edges.value = edges.value.filter(e => e.id !== edge.id)
 }
 </script>
@@ -1447,6 +1628,42 @@ function onEdgeDoubleClick({ edge }: { edge: Edge }) {
 .node-list-search {
     background: rgba(var(--color-card-2-rgb), 0.8);
     border-radius: 99px;
+}
+.workflow-validation {
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+}
+.validation-empty {
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 0.75rem;
+    background: rgba(var(--color-card-2-rgb), 0.7);
+    color: var(--color-font-1);
+}
+.validation-block {
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.75rem;
+}
+.validation-block strong {
+    display: block;
+    margin-bottom: 6px;
+}
+.validation-block ul {
+    margin: 0;
+    padding-left: 16px;
+}
+.validation-block li + li {
+    margin-top: 4px;
+}
+.validation-error {
+    background: rgba(220, 53, 69, 0.14);
+    color: #b42333;
+}
+.validation-warning {
+    background: rgba(245, 158, 11, 0.14);
+    color: #9a5b00;
 }
 .node-list-search svg {
     color: var(--color-font-1);

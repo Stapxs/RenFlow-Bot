@@ -9,6 +9,9 @@ import { HttpRequestNode } from './HttpRequestNode.js'
 import { SendMessageNode } from './SendMessageNode.js'
 import { CommandAnalNode } from './CommandAnalNode.js'
 import { MergeNode } from './MergeNode.js'
+import { LoopStartNode } from './LoopStartNode.js'
+import { LoopEndNode } from './LoopEndNode.js'
+import { LoopBreakNode } from './LoopBreakNode.js'
 import { SystemInfoNode } from './SystemInfoNode.js'
 import { GetLoginInfoNode } from './GetLoginInfoNode.js'
 import { LlmNode } from './LlmNode.js'
@@ -28,6 +31,9 @@ export const builtinNodes = [
     new IfElseNode(),
     new CommandAnalNode(),
     new MergeNode(),
+    new LoopStartNode(),
+    new LoopEndNode(),
+    new LoopBreakNode(),
     new SystemInfoNode(),
     new GetLoginInfoNode(),
     new LlmNode(),
@@ -45,6 +51,9 @@ export {
     IfElseNode,
     CommandAnalNode,
     MergeNode,
+    LoopStartNode,
+    LoopEndNode,
+    LoopBreakNode,
     SystemInfoNode,
     GetLoginInfoNode,
     LlmNode,

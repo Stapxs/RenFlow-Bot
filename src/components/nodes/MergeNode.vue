@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Position, Handle } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import NodeSettingsPanel from '../NodeSettingsPanel.vue'
 import { useNodeParams } from './useNodeHelpers'
 
@@ -15,6 +15,13 @@ const { paramValues, params, updateSettings } = useNodeParams(props as any)
 const showSettingsPanel = ref(false)
 const openSettings = () => { showSettingsPanel.value = true }
 const closeSettings = () => { showSettingsPanel.value = false }
+const nodeIcon = computed(() => {
+    const nodeType = props.data?.nodeType || props.data?.metadata?.id
+    if (nodeType === 'loop-end') {
+        return 'flag-checkered'
+    }
+    return 'gear'
+})
 
 defineEmits(['updateNodeInternals'])
 </script>
@@ -24,7 +31,7 @@ defineEmits(['updateNodeInternals'])
 
     <div class="merge-node">
         <button @click="openSettings">
-            <font-awesome-icon :icon="['fas', 'gear']" />
+            <font-awesome-icon :icon="['fas', nodeIcon]" />
         </button>
     </div>
 

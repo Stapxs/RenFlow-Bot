@@ -148,6 +148,23 @@ const filteredWorkflows = computed(() => {
     })
 })
 
+function validateWorkflowData(full: any): { valid: boolean; errors: string[] } {
+    try {
+        const converter = new WorkflowConverter()
+        const execution = converter.convert(full as VueFlowWorkflow)
+        const result = converter.validate(execution)
+        return {
+            valid: result.valid,
+            errors: result.errors
+        }
+    } catch (error) {
+        return {
+            valid: false,
+            errors: [error instanceof Error ? error.message : String(error)]
+        }
+    }
+}
+
 async function exportWorkspace() {
     if (!backend.isDesktop()) {
         toast.error('仅桌面模式支持导出')
@@ -169,7 +186,12 @@ async function exportWorkspace() {
         const converter = new WorkflowConverter()
         for (const w of enabled) {
             const full = await WorkflowStorage.load(w.id)
-            if (full) files.push({ filename: `${w.id}.json`, content: JSON.stringify(converter.convert(full as unknown as VueFlowWorkflow)) })
+            if (!full) continue
+            const validation = validateWorkflowData(full)
+            if (!validation.valid) {
+                throw new Error(`工作流 ${w.name} 校验失败: ${validation.errors.join('；')}`)
+            }
+            files.push({ filename: `${w.id}.json`, content: JSON.stringify(converter.convert(full as unknown as VueFlowWorkflow)) })
         }
         await backend.call('sys:exportWorkspace', { data: { bots: botsConfig, workflows: files } })
         toast.success('导出成功')
@@ -202,6 +224,12 @@ async function toggleEnableWorkflow(workflow: WorkflowListItem) {
         const full = await WorkflowStorage.load(workflow.id)
         if (!full) {
             toast.error('无法加载工作流')
+            return
+        }
+
+        const validation = validateWorkflowData(full)
+        if (!validation.valid) {
+            toast.error(validation.errors[0] || '工作流结构校验失败')
             return
         }
 
@@ -369,6 +397,11 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
     for (const workflowItem of workflowList) {
         const full = await WorkflowStorage.load(workflowItem.id)
         if (full) {
+            const validation = validateWorkflowData(full)
+            if (!validation.valid) {
+                logger.add(LogType.ERR, `工作流校验失败: ${workflowItem.id}`, validation.errors)
+                continue
+            }
             loadedWorkflows.push(converter.convert(full as unknown as VueFlowWorkflow))
         } else {
             logger.add(LogType.ERR, `加载工作流失败: ${workflowItem.id}`)
@@ -409,6 +442,7 @@ const runFlow = async (data: any, bot: BaseBotAdapter, workflowList: WorkflowLis
                 // 如果编辑窗口返回了 executionData，则本窗口负责执行该执行数据并跳过原本的本地执行
                 if (handledPayload && handledPayload.executionData) {
                     try {
+                        const executionData = handledPayload.executionData as WorkflowExecution
                         // 执行来自编辑器的执行数据（只执行该工作流）
                         await runWorkflowByTrigger([executionData], data, { bot, proxyPort: backend.proxy }, {
                            onWorkflowStart: async (wfId: string) => {

@@ -43,6 +43,14 @@ const settingsParam = computed(() => params.value.find((p: any) => p.type === 's
 const titleParam = computed(() => params.value.find((p: any) => p.key === 'title' && p.type === 'input'))
 const settingsRequired = computed(() => !!settingsParam.value && settingsParam.value.required === true)
 const nonSettingsCount = computed(() => params.value.filter((p: any) => p.type !== 'settings').length)
+const isParamVisible = (param: any) => {
+    const cond = param?.visibleWhen
+    if (!cond) return true
+    const cur = paramValues.value[cond.key]
+    if (Array.isArray(cond.value)) return cond.value.includes(cur)
+    if (cond.value === undefined) return Boolean(cur)
+    return cur === cond.value
+}
 const shouldShowSettings = computed(() => {
     return !!settingsParam.value || nonSettingsCount.value > 5
 })
@@ -50,13 +58,17 @@ const hideParams = computed(() => {
     return settingsRequired.value || nonSettingsCount.value > 5
 })
 const displayParams = computed(() => {
-    const nonSettings = params.value.filter((p: any) => p.type !== 'settings')
+    const nonSettings = params.value.filter((p: any) => p.type !== 'settings' && isParamVisible(p))
     if (hideParams.value) {
         return nonSettings.filter((p: any) => Boolean((p as any).pin))
     }
     return nonSettings
 })
-const settingsParams = computed(() => params.value.filter((p: any) => p.type !== 'settings' && !(p as any).pin))
+const settingsParams = computed(() => params.value.filter((p: any) => p.type !== 'settings' && !(p as any).pin && isParamVisible(p)))
+const allowEditableTitle = computed(() => {
+    const nodeType = props.data?.nodeType || props.data?.metadata?.id
+    return nodeType !== 'loop-start' && nodeType !== 'loop-break'
+})
 const editableTitle = computed({
     get: () => {
         const fallback = titleParam.value?.defaultValue || props.data?.label || ''
@@ -98,14 +110,14 @@ defineEmits(['updateNodeInternals'])
         <header v-if="data.metadata">
             <div class="node-title">
                 <font-awesome-icon :icon="['fas', data.metadata.icon || 'fa-cube']" />
-                <input v-if="titleParam"
+                <input v-if="titleParam && allowEditableTitle"
                     v-model="editableTitle"
                     type="text"
                     class="node-label-input"
                     :placeholder="titleParam.placeholder || data.label"
                     @mousedown.stop
                     @pointerdown.stop>
-                <span v-else class="node-label">{{ data.label }}</span>
+                <span v-else class="node-label">{{ editableTitle }}</span>
             </div>
             <button v-if="shouldShowSettings" class="title-btn" title="节点设置"
                 @click.stop="openSettings">
