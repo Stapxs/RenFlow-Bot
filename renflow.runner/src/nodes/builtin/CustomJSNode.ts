@@ -12,7 +12,15 @@ export class CustomJSNode extends BaseNode {
         description: '执行自定义 JavaScript 代码',
         category: 'custom',
         icon: 'code',
+        settingsComponent: 'CustomJsSettings',
         params: [
+            {
+                key: 'title',
+                label: '节点标题',
+                type: 'input',
+                placeholder: '自定义代码',
+                defaultValue: '自定义代码'
+            },
             {
                 key: 'settings',
                 label: '',
@@ -59,7 +67,9 @@ export class CustomJSNode extends BaseNode {
 
             return {
                 success: true,
-                output: result
+                output: {
+                    data: result
+                }
             }
         } catch (error: any) {
             context.logger.error('[自定义代码] 执行失败:', error.message)

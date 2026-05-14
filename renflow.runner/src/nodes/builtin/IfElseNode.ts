@@ -68,7 +68,8 @@ export class IfElseNode extends BaseNode {
             let paramValue: any
             if (condition.parameter === 'custom') {
                 // 自定义 JS 条件
-                const conditionFunc = new Function('input', 'context', condition.customCode || 'return false')
+                const conditionFunc = new Function(
+                    'input', 'context', condition.customCode || 'return false')
                 result = Boolean(await conditionFunc(input, context))
             } else {
                 // 标准参数比较

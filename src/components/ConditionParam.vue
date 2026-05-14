@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import Codemirror from 'codemirror-editor-vue3'
 import { ref, computed, watch } from 'vue'
+import type { Editor, EditorConfiguration } from 'codemirror'
+import '@app/assets/css/codemirror-bcui.css'
+import 'codemirror/mode/javascript/javascript.js'
 
 interface Props {
     modelValue: {
@@ -51,6 +55,14 @@ const isCustomMode = computed(() => {
     return localValue.value.parameter === 'custom'
 })
 
+const defaultCustomCode = '// 返回 true 或 false\n// 可用变量: input, context\n\nreturn input !== null'
+const cmOptions: EditorConfiguration = {
+    mode: 'javascript',
+    indentUnit: 4,
+    smartIndent: true,
+    lineNumbers: true,
+}
+
 // 更新参数
 const updateParameter = (value: string) => {
     localValue.value.parameter = value
@@ -73,6 +85,10 @@ const updateValue = (value: string) => {
 const updateCustomCode = (value: string) => {
     localValue.value.customCode = value
     emitUpdate()
+}
+
+const onEditorReady = (cm: Editor) => {
+    cm.setOption('theme', 'bcui')
 }
 
 // 发送更新事件
@@ -104,11 +120,14 @@ const emitUpdate = () => {
                 </div>
             </div>
 
-            <textarea placeholder="// 返回 true 或 false&#10;// 可用变量: input, context&#10;&#10;return input !== null"
-                rows="6"
-                class="custom-code"
-                :value="localValue.customCode || '// 返回 true 或 false\n// 可用变量: input, context\n\nreturn input !== null'"
-                @input="updateCustomCode(($event.target as HTMLTextAreaElement).value)" />
+            <div class="custom-code">
+                <Codemirror
+                    :value="localValue.customCode || defaultCustomCode"
+                    :options="cmOptions"
+                    height="180px"
+                    @change="updateCustomCode"
+                    @ready="onEditorReady" />
+            </div>
         </div>
 
         <!-- 标准模式 -->
@@ -273,17 +292,12 @@ const emitUpdate = () => {
     background: rgba(var(--color-card-2-rgb), 0.5);
     border: 1px solid rgba(var(--color-font-rgb), 0.1);
     border-radius: 5px;
-    padding: 8px;
-    font-size: 0.7rem;
-    color: var(--color-font);
-    font-family: 'Courier New', monospace;
-    outline: none;
-    resize: vertical;
-    min-height: 100px;
+    overflow: hidden;
+    min-height: 180px;
     transition: border-color 0.2s, background 0.2s;
 }
 
-.custom-code:focus {
+.custom-code:focus-within {
     border-color: var(--color-main);
     background: rgba(var(--color-card-2-rgb), 0.8);
 }
