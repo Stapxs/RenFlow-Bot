@@ -38,10 +38,11 @@ export class SendMessageNode extends BaseNode {
                 label: '接收者类型',
                 type: 'select',
                 options: [
+                    { label: '自动', value: 'auto' },
                     { label: '私聊', value: 'private' },
                     { label: '群组', value: 'group' }
                 ],
-                defaultValue: 'private',
+                defaultValue: 'auto',
                 required: true
             },
             {
@@ -94,7 +95,8 @@ export class SendMessageNode extends BaseNode {
             targetCfg = message.targetId || message.groupId
         }
 
-        const targetType = params['targetType'] || 'private'
+        const rawTargetType = params['targetType'] || 'auto'
+        const targetType = rawTargetType === 'auto' ? ((message.groupId ?? (message as any).group_id) != undefined ? 'group' : 'private') : rawTargetType
 
         // 组装消息体
         const rawVal = params['msgList'] as

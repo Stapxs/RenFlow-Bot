@@ -35,10 +35,14 @@ export async function runWorkflow(
     }
 ): Promise<void> {
     const workflowConverter = new WorkflowConverter()
+    const logger = new Logger('runWorkflow')
 
     const validation = workflowConverter.validate(executionData)
     if (!validation.valid) {
         throw new Error('工作流执行数据验证失败: ' + JSON.stringify(validation.errors))
+    }
+    if (validation.warnings.length > 0) {
+        logger.warn(`工作流 ${executionData.id} 存在非阻断警告: ${JSON.stringify(validation.warnings)}`)
     }
 
     const triggerCheck = checkTriggerConfig(executionData.trigger.params, data)
@@ -120,6 +124,9 @@ export async function runWorkflowByTrigger(
         if (!validation.valid) {
             logger.warn(`工作流 ${workflow.id} 验证失败: ${JSON.stringify(validation.errors)}。跳过执行。`)
             continue
+        }
+        if (validation.warnings.length > 0) {
+            logger.warn(`工作流 ${workflow.id} 存在非阻断警告: ${JSON.stringify(validation.warnings)}。继续执行。`)
         }
 
         if (callbacks?.onWorkflowStart) {

@@ -246,8 +246,9 @@ export class WorkflowConverter {
     /**
      * 验证执行数据的完整性
      */
-    validate(execution: WorkflowExecution): { valid: boolean; errors: string[] } {
+    validate(execution: WorkflowExecution): { valid: boolean; errors: string[]; warnings: string[] } {
         const errors: string[] = []
+        const warnings: string[] = []
 
         // 1. 检查是否有入口节点
         if (!execution.entryNode) {
@@ -280,6 +281,7 @@ export class WorkflowConverter {
         }
 
         // 3. 检查是否存在孤立节点(没有被任何节点引用,也不是入口节点)
+        // 孤立节点不影响已连接链路执行，仅作为警告返回。
         const referencedNodes = new Set<string>()
         if (execution.entryNode) {
             referencedNodes.add(execution.entryNode)
@@ -313,11 +315,14 @@ export class WorkflowConverter {
                     `next: [${node.next.join(', ')}], ` +
                     `branches: ${node.branches ? JSON.stringify(node.branches) : 'null'}`
                 )
-                errors.push(`节点 ${nodeId} 是孤立节点（未被任何节点引用）`)
+                warnings.push(`节点 ${nodeId} 是孤立节点（未被任何节点引用）`)
             }
-        }        return {
+        }
+
+        return {
             valid: errors.length === 0,
-            errors
+            errors,
+            warnings
         }
     }
 }
