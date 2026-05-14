@@ -40,6 +40,7 @@ const availableParameters = computed(() => {
 })
 
 const settingsParam = computed(() => params.value.find((p: any) => p.type === 'settings'))
+const titleParam = computed(() => params.value.find((p: any) => p.key === 'title' && p.type === 'input'))
 const settingsRequired = computed(() => !!settingsParam.value && settingsParam.value.required === true)
 const nonSettingsCount = computed(() => params.value.filter((p: any) => p.type !== 'settings').length)
 const shouldShowSettings = computed(() => {
@@ -56,6 +57,13 @@ const displayParams = computed(() => {
     return nonSettings
 })
 const settingsParams = computed(() => params.value.filter((p: any) => p.type !== 'settings' && !(p as any).pin))
+const editableTitle = computed({
+    get: () => {
+        const fallback = titleParam.value?.defaultValue || props.data?.label || ''
+        return paramValues.value.title || fallback
+    },
+    set: (value: string) => updateParam('title', value)
+})
 
 // 当外部通过 updateNode 修改 data.params 时，需要同步本地的 paramValues，
 // 否则 UI（input/select 等）不会反映更新（例如 undo/redo 回放）。
@@ -90,7 +98,14 @@ defineEmits(['updateNodeInternals'])
         <header v-if="data.metadata">
             <div class="node-title">
                 <font-awesome-icon :icon="['fas', data.metadata.icon || 'fa-cube']" />
-                <span class="node-label">{{ data.label }}</span>
+                <input v-if="titleParam"
+                    v-model="editableTitle"
+                    type="text"
+                    class="node-label-input"
+                    :placeholder="titleParam.placeholder || data.label"
+                    @mousedown.stop
+                    @pointerdown.stop>
+                <span v-else class="node-label">{{ data.label }}</span>
             </div>
             <button v-if="shouldShowSettings" class="title-btn" title="节点设置"
                 @click.stop="openSettings">
@@ -241,6 +256,33 @@ defineEmits(['updateNodeInternals'])
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+    flex: 1;
+}
+
+.vue-flow__node-base header .node-label-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: inherit;
+    font-weight: bold;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+}
+
+.vue-flow__node-base header .node-label-input:focus {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.vue-flow__node-base header .node-label-input::placeholder {
+    color: inherit;
+    opacity: 0.7;
 }
 
 .vue-flow__node-base header svg {

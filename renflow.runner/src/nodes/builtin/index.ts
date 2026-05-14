@@ -4,6 +4,7 @@ import { SendTextNode } from './SendTextNode.js'
 import { CustomJSNode } from './CustomJSNode.js'
 import { IfElseNode } from './IfElseNode.js'
 import { HtmlRenderNode } from './HtmlRenderNode.js'
+import { MarkdownRenderNode } from './MarkdownRenderNode.js'
 import { HttpRequestNode } from './HttpRequestNode.js'
 import { SendMessageNode } from './SendMessageNode.js'
 import { CommandAnalNode } from './CommandAnalNode.js'
@@ -21,6 +22,7 @@ export const builtinNodes = [
     new SendTextNode(),
     new SendMessageNode(),
     new HtmlRenderNode(),
+    new MarkdownRenderNode(),
     new HttpRequestNode(),
     new CustomJSNode(),
     new IfElseNode(),
@@ -37,6 +39,7 @@ export {
     SendTextNode,
     SendMessageNode,
     HtmlRenderNode,
+    MarkdownRenderNode,
     HttpRequestNode,
     CustomJSNode,
     IfElseNode,
