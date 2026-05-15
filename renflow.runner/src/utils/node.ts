@@ -32,11 +32,18 @@ export function fillTextTemplate(
     let newStr = str
     while ((match = regex.exec(str)) !== null) {
         const placeholder = match[0]
-        const path = match[1].split('.')
+        const rawPath = match[1].trim()
+        const path = rawPath.split('.')
         let value = undefined
-        if(path.length == 1) {
+
+        // 优先按当前 input 直接解析完整路径，和日志节点的使用体验保持一致。
+        value = getValue(input, rawPath)
+
+        // 若当前 input 中不存在，再回退到旧的“第一段视为全局节点 ID”规则，
+        // 以兼容历史模板如 {node-1.result}。
+        if (value === undefined && path.length === 1) {
             value = getValue(input, path[0])
-        } else {
+        } else if (value === undefined) {
             const nodeId = path[0]
             const nodeData = getGlobal(context, nodeId)
             value = getValue(nodeData, path.slice(1).join('.'))

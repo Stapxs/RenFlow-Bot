@@ -12,13 +12,6 @@ export class LoopStartNode extends BaseNode {
         maxOutput: 1,
         params: [
             {
-                key: 'title',
-                label: '节点标题',
-                type: 'input',
-                defaultValue: '循环',
-                placeholder: '循环'
-            },
-            {
                 key: 'mode',
                 label: '循环模式',
                 type: 'select',
@@ -38,10 +31,10 @@ export class LoopStartNode extends BaseNode {
             },
             {
                 key: 'source',
-                label: '遍历来源',
+                label: '遍历对象',
                 type: 'input',
                 defaultValue: 'input.items',
-                placeholder: '例如 input.items',
+                placeholder: '例如 input.items 或 input.map',
                 visibleWhen: { key: 'mode', value: 'iterate' }
             },
             {
@@ -56,9 +49,16 @@ export class LoopStartNode extends BaseNode {
             }
         ],
         outputSchema: [
-            { key: 'results', label: '循环结果列表', type: 'array' },
-            { key: 'result', label: '最后结果', type: 'any' },
-            { key: 'loopSummary', label: '循环摘要', type: 'object' }
+            { key: 'loop', label: '循环上下文', type: 'object' },
+            { key: 'mode', label: '循环模式', type: 'string' },
+            { key: 'index', label: '当前索引', type: 'number' },
+            { key: 'iteration', label: '当前轮次', type: 'number' },
+            { key: 'count', label: '总轮数', type: 'number' },
+            { key: 'isFirst', label: '是否首轮', type: 'boolean' },
+            { key: 'isLast', label: '是否末轮', type: 'boolean' },
+            { key: 'item', label: '当前项', type: 'any' },
+            { key: 'key', label: '当前键', type: 'string' },
+            { key: 'value', label: '当前值', type: 'any' }
         ]
     }
 

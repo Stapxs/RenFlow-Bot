@@ -9,15 +9,7 @@ export class LoopBreakNode extends BaseNode {
         category: 'control',
         icon: 'forward',
         maxOutput: 0,
-        params: [
-            {
-                key: 'title',
-                label: '节点标题',
-                type: 'input',
-                defaultValue: '跳出循环',
-                placeholder: '跳出循环'
-            }
-        ],
+        params: [],
         outputSchema: [
             { key: 'input', label: '当前输入', type: 'any' }
         ]

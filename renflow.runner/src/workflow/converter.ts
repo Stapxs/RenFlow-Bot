@@ -20,7 +20,10 @@ export class WorkflowConverter {
         this.logger = new Logger('WorkflowConverter')
     }
 
-    convertAuto(workflow: VueFlowWorkflow): WorkflowExecution {
+    convertAuto(workflow: VueFlowWorkflow | WorkflowExecution): WorkflowExecution {
+        if (this.isExecutionWorkflow(workflow)) {
+            return workflow
+        }
         return this.convert(workflow)
     }
 
@@ -67,6 +70,19 @@ export class WorkflowConverter {
             label: workflow.triggerLabel,
             params: { ...(workflow.startParams || {}) }
         }
+    }
+
+    private isExecutionWorkflow(workflow: VueFlowWorkflow | WorkflowExecution): workflow is WorkflowExecution {
+        if (!workflow || typeof workflow !== 'object') {
+            return false
+        }
+
+        const candidate = workflow as WorkflowExecution
+        return !!candidate.trigger
+            && typeof candidate.trigger === 'object'
+            && !Array.isArray(candidate.nodes)
+            && !!candidate.nodes
+            && typeof candidate.nodes === 'object'
     }
 
     private findEntryNode(triggerNodeId: string, edges: VueFlowEdge[]): string | null {

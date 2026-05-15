@@ -18,6 +18,30 @@ const isNode = typeof process !== 'undefined' && process.versions && process.ver
 // 全局可调用的优雅关闭函数（当 main 启动适配器时会被赋值）
 let performGlobalShutdown: (() => Promise<void>) | undefined = undefined
 
+function getNodeLabel(nodeType?: string) {
+    if (!nodeType) return '未知节点'
+    return nodeManager.getNodeMetadata(nodeType)?.name || nodeType
+}
+
+function previewValue(value: any, maxLength = 160): string {
+    if (value === undefined) return 'undefined'
+    if (value === null) return 'null'
+
+    let text = ''
+    if (typeof value === 'string') {
+        text = value
+    } else {
+        try {
+            text = JSON.stringify(value)
+        } catch (_error) {
+            text = String(value)
+        }
+    }
+
+    if (text.length <= maxLength) return text
+    return `${text.slice(0, maxLength)}...`
+}
+
 async function main() {
     const logger = new Logger('Main')
     // 支持通过环境变量开启调试日志：RENFLOW_LOG=debug
@@ -51,7 +75,30 @@ async function main() {
                         const workflowExecution = converter.convertAuto(json)
 
                         const engine = new WorkflowEngine()
-                        const result = await engine.execute(workflowExecution, null)
+                        const result = await engine.execute(workflowExecution, null, {
+                            callback: {
+                                onNodeStart: async (nodeId, nodeType, input) => {
+                                    logger.info(`[${workflowExecution.id}] 开始节点 ${nodeId} <${getNodeLabel(nodeType)}>`)
+                                    logger.debug(`[${workflowExecution.id}] 节点输入 ${nodeId}: ${previewValue(input)}`)
+                                },
+                                onNodeComplete: async (nodeId, nodeResult) => {
+                                    const nodeType = workflowExecution.nodes[nodeId]?.type
+                                    logger.info(`[${workflowExecution.id}] 完成节点 ${nodeId} <${getNodeLabel(nodeType)}>`)
+                                    logger.debug(`[${workflowExecution.id}] 节点输出 ${nodeId}: ${previewValue(nodeResult?.output)}`)
+                                },
+                                onNodeError: async (nodeId, error) => {
+                                    const nodeType = workflowExecution.nodes[nodeId]?.type
+                                    logger.error(`[${workflowExecution.id}] 节点失败 ${nodeId} <${getNodeLabel(nodeType)}>`, error)
+                                },
+                                onWorkflowComplete: async (workflowResult) => {
+                                    if (workflowResult.success) {
+                                        logger.info(`[${workflowExecution.id}] 工作流执行完成`)
+                                    } else {
+                                        logger.error(`[${workflowExecution.id}] 工作流执行失败`, workflowResult.error)
+                                    }
+                                }
+                            }
+                        })
                         if (!result.success) {
                             logger.error('工作流执行失败 > ', result.error)
                             process.exit(2)
@@ -71,6 +118,7 @@ async function main() {
                             throw new Error('包内缺少 bots.config')
                         }
                         const botsConfig = JSON.parse(botsEntry.getData().toString('utf-8')) as Array<{ id: string, name: string, type: string, address: string, token?: string }>
+                        const workflowMap = new Map<string, any>()
 
                         for (const e of entries) {
                             if (e.entryName.endsWith('.json') && e.entryName !== 'bots.config') {
@@ -78,7 +126,9 @@ async function main() {
                                     const content = e.getData().toString('utf-8')
                                     const json = JSON.parse(content)
                                     const converter = new WorkflowConverter()
-                                    workflows.push(converter.convertAuto(json))
+                                    const workflow = converter.convertAuto(json)
+                                    workflows.push(workflow)
+                                    workflowMap.set(workflow.id, workflow)
                                 } catch (err) {
                                     logger.warn(`解析工作流失败: ${e.entryName} > ${String(err)}`)
                                 }
@@ -131,7 +181,39 @@ async function main() {
                                 adapter.on(['message','message_mine'], (p: any) => {
                                     const eventName = p.isMine ? 'message_mine' : 'message'
                                     const relevant = workflows.filter(w => w.trigger?.name === eventName || w.trigger?.label === eventName)
-                                    runWorkflowByTrigger(relevant, p, { timeout: 60000, bot: adapter }).catch(() => void 0)
+                                    logger.info(`收到事件 ${eventName}，匹配 ${relevant.length} 个工作流`)
+                                    logger.debug(`触发数据预览: ${previewValue(p)}`)
+                                    runWorkflowByTrigger(relevant, p, { timeout: 60000, bot: adapter }, {
+                                        onWorkflowStart: async (workflowId: string) => {
+                                            logger.info(`[${workflowId}] 准备执行工作流`)
+                                            return true
+                                        },
+                                        onNodeStart: async (workflowId: string, nodeId: string, input: any) => {
+                                            const workflow = workflowMap.get(workflowId)
+                                            const nodeType = workflow?.nodes?.[nodeId]?.type
+                                            logger.info(`[${workflowId}] 开始节点 ${nodeId} <${getNodeLabel(nodeType)}>`)
+                                            logger.debug(`[${workflowId}] 节点输入 ${nodeId}: ${previewValue(input)}`)
+                                        },
+                                        onNodeComplete: async (workflowId: string, nodeId: string) => {
+                                            const workflow = workflowMap.get(workflowId)
+                                            const nodeType = workflow?.nodes?.[nodeId]?.type
+                                            logger.info(`[${workflowId}] 完成节点 ${nodeId} <${getNodeLabel(nodeType)}>`)
+                                        },
+                                        onNodeError: async (workflowId: string, nodeId: string, error: any) => {
+                                            const workflow = workflowMap.get(workflowId)
+                                            const nodeType = workflow?.nodes?.[nodeId]?.type
+                                            logger.error(`[${workflowId}] 节点失败 ${nodeId} <${getNodeLabel(nodeType)}>`, error)
+                                        },
+                                        onWorkflowComplete: async (workflowId: string, workflowResult: any) => {
+                                            if (workflowResult.success) {
+                                                logger.info(`[${workflowId}] 工作流执行完成`)
+                                            } else {
+                                                logger.error(`[${workflowId}] 工作流执行失败`, workflowResult.error)
+                                            }
+                                        }
+                                    }).catch((err) => {
+                                        logger.error(`触发工作流执行失败: ${eventName}`, err)
+                                    })
                                 })
                                 adapter.on('connected', () => logger.info(`适配器已连接: ${bot.id}`))
                                 adapter.on('disconnected', () => logger.warn(`适配器已断开: ${bot.id}`))

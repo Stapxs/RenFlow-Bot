@@ -65,6 +65,10 @@
                 <MergeNodeVue v-bind="loopEndNodeProps" />
             </template>
 
+            <template #node-loop-break="loopBreakNodeProps">
+                <MergeNodeVue v-bind="loopBreakNodeProps" />
+            </template>
+
             <template #edge-base="baseEdgeProps">
                 <BaseEdge v-bind="baseEdgeProps" />
             </template>
@@ -279,7 +283,7 @@ const LOOP_PAIR_SPACING_X = 260
 const LOOP_PAIR_KIND = 'loop-pair'
 
 function resolveNodeRenderType(nodeType?: string, fallbackType?: string) {
-    if (nodeType === 'loop-end') {
+    if (nodeType === 'loop-end' || nodeType === 'loop-break') {
         return nodeType
     }
     if (nodeType) {
@@ -1241,7 +1245,7 @@ function onDrop(event: DragEvent) {
     } else {
         const newNode: Node = {
             id: `node-${nodeIdCounter++}`,
-            type: getExNodeTypes(draggedNodeType.value.id),
+            type: resolveNodeRenderType(draggedNodeType.value.id),
             position,
             draggable: draggedNodeType.value.id === 'merge' ? false : true,
             class: draggedNodeType.value.id === 'merge' ? 'no-transition' : undefined,

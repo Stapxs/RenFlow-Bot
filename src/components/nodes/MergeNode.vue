@@ -3,25 +3,37 @@ import { Position, Handle } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { computed, ref } from 'vue'
 import NodeSettingsPanel from '../NodeSettingsPanel.vue'
-import { useNodeParams } from './useNodeHelpers'
+import { useNodeParams, useSafeDelete } from './useNodeHelpers'
 
 const props = defineProps<NodeProps>()
 // Removed unused toRef usage
 
 // 使用通用参数管理
 const { paramValues, params, updateSettings } = useNodeParams(props as any)
+const { deleteNode } = useSafeDelete(props as any)
 
 // 设置面板显示状态
 const showSettingsPanel = ref(false)
 const openSettings = () => { showSettingsPanel.value = true }
 const closeSettings = () => { showSettingsPanel.value = false }
+const nodeType = computed(() => props.data?.nodeType || props.data?.metadata?.id)
 const nodeIcon = computed(() => {
-    const nodeType = props.data?.nodeType || props.data?.metadata?.id
-    if (nodeType === 'loop-end') {
-        return 'flag-checkered'
+    if (nodeType.value === 'loop-end') {
+        return 'repeat'
+    }
+    if (nodeType.value === 'loop-break') {
+        return 'right-from-bracket'
     }
     return 'gear'
 })
+const shouldShowSettings = computed(() => nodeType.value !== 'loop-break')
+const handleClick = () => {
+    if (nodeType.value === 'loop-break') {
+        deleteNode()
+        return
+    }
+    openSettings()
+}
 
 defineEmits(['updateNodeInternals'])
 </script>
@@ -30,7 +42,7 @@ defineEmits(['updateNodeInternals'])
     <Handle type="target" :position="Position.Left" />
 
     <div class="merge-node">
-        <button @click="openSettings">
+        <button @click="handleClick">
             <font-awesome-icon :icon="['fas', nodeIcon]" />
         </button>
     </div>
@@ -39,6 +51,7 @@ defineEmits(['updateNodeInternals'])
 
     <!-- 设置面板弹窗 -->
     <NodeSettingsPanel
+        v-if="shouldShowSettings"
         v-model="paramValues"
         :pan-show="showSettingsPanel"
         :params="params"

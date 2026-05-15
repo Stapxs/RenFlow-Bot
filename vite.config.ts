@@ -20,7 +20,8 @@ export default defineConfig({
     build: {
         rollupOptions: {
             external: [
-                'puppeteer'
+                'puppeteer',
+                'playwright'
             ]
         }
     }
