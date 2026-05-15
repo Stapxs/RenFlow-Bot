@@ -10,6 +10,19 @@ export class HttpRequestNode extends BaseNode {
 
     logger = new Logger('HttpRequestNode')
 
+    private rewriteUrlForProxy(url: string, context: NodeContext): string {
+        const proxyPort = context.globalState?.get('__tauriProxyPort')
+        if (!proxyPort) return url
+
+        try {
+            const parsed = new URL(url)
+            const scheme = parsed.protocol.replace(':', '')
+            return `http://127.0.0.1:${proxyPort}/relay/${scheme}/${parsed.host}${parsed.pathname}${parsed.search}`
+        } catch {
+            return url
+        }
+    }
+
     metadata: NodeMetadata = {
         id: 'http-request',
         name: 'HTTP 请求',
@@ -86,7 +99,7 @@ export class HttpRequestNode extends BaseNode {
             return { success: false, error: 'query 参数不是合法的 JSON' }
         }
 
-        const url = this.buildUrlWithQuery(rawUrl, queryObj)
+        const url = this.rewriteUrlForProxy(this.buildUrlWithQuery(rawUrl, queryObj), context)
 
         // body
         let body: any = undefined

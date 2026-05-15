@@ -1,15 +1,21 @@
 const RESOURCE_WAIT_TIMEOUT_MS = 10000
 
 type PuppeteerLike = {
-    launch: (options?: Record<string, any>) => Promise<{
-        newPage: () => Promise<{
-            setViewport?: (viewport: { width: number; height: number }) => Promise<void>
-            setContent: (html: string, options?: Record<string, any>) => Promise<void>
-            screenshot: (options?: Record<string, any>) => Promise<Uint8Array | Buffer>
+    chromium: {
+        launch: (options?: Record<string, any>) => Promise<{
+            newPage: () => Promise<{
+                setViewportSize?: (viewport: { width: number; height: number }) => Promise<void>
+                setContent: (html: string, options?: Record<string, any>) => Promise<void>
+                screenshot: (options?: Record<string, any>) => Promise<Uint8Array | Buffer>
+            }>
+            close: () => Promise<void>
         }>
-        close: () => Promise<void>
-    }>
+    }
 }
+
+type PlaywrightLike = PuppeteerLike
+
+type BrowserInstance = Awaited<ReturnType<PlaywrightLike['chromium']['launch']>>
 
 export interface HtmlImageRenderOptions {
     width?: number
@@ -17,15 +23,38 @@ export interface HtmlImageRenderOptions {
     browserViewportHeight?: number
 }
 
-async function loadPuppeteer(globalObject: any): Promise<PuppeteerLike> {
-    const injectedLoader = globalObject?.__renflowLoadPuppeteer
+async function loadPlaywright(globalObject: any): Promise<PlaywrightLike> {
+    const injectedLoader = globalObject?.__renflowLoadPlaywright || globalObject?.__renflowLoadPuppeteer
     if (typeof injectedLoader === 'function') {
         const loaded = await injectedLoader()
         return loaded?.default || loaded
     }
 
-    const puppeteerImport = await import(/* @vite-ignore */ 'puppeteer')
-    return puppeteerImport.default || puppeteerImport
+    const runtimeImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>
+    const playwrightImport = await runtimeImport('playwright')
+    return playwrightImport.default || playwrightImport
+}
+
+async function launchChromium(playwright: PlaywrightLike): Promise<BrowserInstance> {
+    const candidates = [
+        undefined,
+        'chrome',
+        'msedge'
+    ]
+
+    let lastError: any
+    for (const channel of candidates) {
+        try {
+            return await playwright.chromium.launch({
+                channel,
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            })
+        } catch (error) {
+            lastError = error
+        }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError || '启动 Chromium 失败'))
 }
 
 function normalizeWidth(width?: number): number {
@@ -104,13 +133,13 @@ async function renderHtmlToImageInNode(
 ): Promise<string> {
     const width = normalizeWidth(options.width)
     const viewportHeight = normalizeViewportHeight(options.browserViewportHeight)
-    const puppeteer = await loadPuppeteer(g)
-    const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] })
+    const playwright = await loadPlaywright(g)
+    const browser = await launchChromium(playwright)
 
     try {
         const page = await browser.newPage()
-        if (typeof page.setViewport === 'function') {
-            await page.setViewport({ width, height: viewportHeight })
+        if (typeof page.setViewportSize === 'function') {
+            await page.setViewportSize({ width, height: viewportHeight })
         }
         await page.setContent(html, { waitUntil: 'networkidle0' })
         const buffer = await page.screenshot({

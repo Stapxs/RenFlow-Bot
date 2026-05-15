@@ -42,16 +42,18 @@ test('renderMarkdownDocument generates stable GFM HTML structure', () => {
 })
 
 test('MarkdownRenderNode renders markdown with template variables and returns html/image', async () => {
-    const originalLoader = (globalThis as any).__renflowLoadPuppeteer
-    ;(globalThis as any).__renflowLoadPuppeteer = async () => ({
-        launch: async () => ({
+    const originalLoader = (globalThis as any).__renflowLoadPlaywright
+    ;(globalThis as any).__renflowLoadPlaywright = async () => ({
+        chromium: {
+            launch: async () => ({
             newPage: async () => ({
-                setViewport: async () => {},
+                setViewportSize: async () => {},
                 setContent: async () => {},
                 screenshot: async () => Buffer.from('png-bytes')
             }),
             close: async () => {}
-        })
+            })
+        }
     })
 
     try {
@@ -69,14 +71,14 @@ test('MarkdownRenderNode renders markdown with template variables and returns ht
         assert.match(result.output.html, /<strong>RenFlow<\/strong>/)
         assert.match(result.output.html, /checkbox/)
     } finally {
-        ;(globalThis as any).__renflowLoadPuppeteer = originalLoader
+        ;(globalThis as any).__renflowLoadPlaywright = originalLoader
     }
 })
 
-test('MarkdownRenderNode reports clear error when puppeteer is unavailable', async () => {
-    const originalLoader = (globalThis as any).__renflowLoadPuppeteer
-    ;(globalThis as any).__renflowLoadPuppeteer = async () => {
-        throw new Error('Cannot find package puppeteer')
+test('MarkdownRenderNode reports clear error when playwright is unavailable', async () => {
+    const originalLoader = (globalThis as any).__renflowLoadPlaywright
+    ;(globalThis as any).__renflowLoadPlaywright = async () => {
+        throw new Error('Cannot find package playwright')
     }
 
     try {
@@ -86,10 +88,10 @@ test('MarkdownRenderNode reports clear error when puppeteer is unavailable', asy
         }, createContext() as any)
 
         assert.equal(result.success, false)
-        assert.match(result.error || '', /请确保已安装 puppeteer/)
-        assert.match(result.error || '', /Cannot find package puppeteer/)
+        assert.match(result.error || '', /请确保已安装 playwright/)
+        assert.match(result.error || '', /Cannot find package playwright/)
     } finally {
-        ;(globalThis as any).__renflowLoadPuppeteer = originalLoader
+        ;(globalThis as any).__renflowLoadPlaywright = originalLoader
     }
 })
 

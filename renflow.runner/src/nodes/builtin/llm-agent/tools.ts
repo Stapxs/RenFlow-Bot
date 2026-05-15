@@ -53,7 +53,20 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
     })
 }
 
-async function executeHttpRequest(args: Record<string, any>): Promise<any> {
+function rewriteHttpUrlForProxy(url: string, context: AgentToolExecutionContext): string {
+    const proxyPort = context.nodeContext.globalState?.get('__tauriProxyPort')
+    if (!proxyPort) return url
+
+    try {
+        const parsed = new URL(url)
+        const scheme = parsed.protocol.replace(':', '')
+        return `http://127.0.0.1:${proxyPort}/relay/${scheme}/${parsed.host}${parsed.pathname}${parsed.search}`
+    } catch {
+        return url
+    }
+}
+
+async function executeHttpRequest(args: Record<string, any>, context: AgentToolExecutionContext): Promise<any> {
     const method = String(args.method || 'GET').toUpperCase()
     const headers = (args.headers && typeof args.headers === 'object') ? args.headers : {}
     const query = (args.query && typeof args.query === 'object') ? args.query : {}
@@ -82,7 +95,7 @@ async function executeHttpRequest(args: Record<string, any>): Promise<any> {
         }
     }
 
-    const res = await fetch(url.toString(), requestInit)
+    const res = await fetch(rewriteHttpUrlForProxy(url.toString(), context), requestInit)
     const text = await res.text()
     let body: any = text
     try {
@@ -239,7 +252,7 @@ export const builtinAgentTools: AgentTool[] = [
             required: ['url']
         },
         async execute(args, context) {
-            const result = await runTool(() => executeHttpRequest(args), context, 'http_request')
+            const result = await runTool(() => executeHttpRequest(args, context), context, 'http_request')
             return toToolResult(result)
         }
     },

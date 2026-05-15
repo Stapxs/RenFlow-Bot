@@ -401,3 +401,21 @@ test('WorkflowConverter converts loop pair metadata from VueFlow edges', () => {
     assert.equal(execution.nodes['end-1'].loopRole, 'end')
     assert.equal(execution.nodes['end-1'].loopPairId, 'start-1')
 })
+
+test('WorkflowConverter convertAuto accepts execution workflow payloads directly', () => {
+    const converter = new WorkflowConverter()
+    const execution = createExecution({
+        'node-1': {
+            id: 'node-1',
+            type: 'custom-js',
+            params: { code: 'return input' },
+            next: []
+        }
+    })
+
+    const result = converter.convertAuto(execution)
+
+    assert.equal(result, execution)
+    assert.deepEqual(result.nodes, execution.nodes)
+    assert.equal(result.entryNode, 'loop-start-1')
+})

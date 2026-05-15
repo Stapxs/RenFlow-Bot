@@ -88,6 +88,39 @@ test('http_request executes with query params and json body', async () => {
     }
 })
 
+test('http_request uses tauri relay proxy by default when proxy port exists', async () => {
+    const tool = getTool('http_request')
+    let capturedUrl = ''
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (input: string | URL | Request) => {
+        capturedUrl = String(input)
+        return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+        })
+    }) as typeof fetch
+
+    try {
+        const result = await tool.execute(tool.schema.parse({
+            url: 'https://example.com/api/items?from=test'
+        }) as Record<string, any>, {
+            ...baseContext,
+            nodeContext: {
+                ...baseContext.nodeContext,
+                globalState: new Map([
+                    ['__tauriProxyPort', 6190]
+                ])
+            }
+        })
+
+        assert.equal(result.success, true)
+        assert.equal(capturedUrl, 'http://127.0.0.1:6190/relay/https/example.com/api/items?from=test')
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
+
 test('http_request preserves custom content-type and string body', async () => {
     const tool = getTool('http_request')
     let capturedInit: RequestInit | undefined

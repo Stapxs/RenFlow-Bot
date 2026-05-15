@@ -32,7 +32,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "watch": "tsc --watch",
-    "test": "node --import tsx --test ./src/nodes/builtin/MarkdownRenderNode.test.ts ./src/nodes/builtin/llm-agent/*.test.ts"
+    "test": "node --import tsx --test ./src/nodes/builtin/MarkdownRenderNode.test.ts ./src/nodes/builtin/LlmNode.test.ts ./src/nodes/builtin/WebpageScreenshotNode.test.ts ./src/nodes/builtin/llm-agent/*.test.ts ./src/workflow/*.test.ts ./src/utils/*.test.ts"
   },
   "bin": {
     "renflow-runner": "./bin/renflow-runner.js"
@@ -76,6 +76,6 @@
     "zod": "^4.1.12"
   },
   "optionalDependencies": {
-    "puppeteer": "^24.28.0"
+    "playwright": "^1.54.2"
   }
 }

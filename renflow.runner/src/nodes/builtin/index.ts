@@ -16,6 +16,7 @@ import { SystemInfoNode } from './SystemInfoNode.js'
 import { GetLoginInfoNode } from './GetLoginInfoNode.js'
 import { LlmNode } from './LlmNode.js'
 import { DictionaryNode } from './DictionaryNode.js'
+import { WebpageScreenshotNode } from './WebpageScreenshotNode.js'
 
 /**
  * 导出所有内置节点
@@ -32,6 +33,7 @@ export const builtinNodes = [
     new IfElseNode(),
     new CommandAnalNode(),
     new DictionaryNode(),
+    new WebpageScreenshotNode(),
     new MergeNode(),
     new LoopStartNode(),
     new LoopEndNode(),
@@ -53,6 +55,7 @@ export {
     IfElseNode,
     CommandAnalNode,
     DictionaryNode,
+    WebpageScreenshotNode,
     MergeNode,
     LoopStartNode,
     LoopEndNode,

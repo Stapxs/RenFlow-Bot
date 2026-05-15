@@ -55,7 +55,7 @@ export class HtmlRenderNode extends BaseNode {
             const msg = (err instanceof Error ? err.message : String(err)) || ''
             const g = (globalThis as any)
             const isBrowser = !!(g && g.document && g.window)
-            const prefix = isBrowser ? '浏览器端渲染失败' : '服务器端渲染失败（请确保已安装 puppeteer）'
+            const prefix = isBrowser ? '浏览器端渲染失败' : '服务器端渲染失败（请确保已安装 playwright）'
             return { success: false, error: `${prefix}：${msg}` }
         }
     }
