@@ -15,6 +15,7 @@ import { LoopBreakNode } from './LoopBreakNode.js'
 import { SystemInfoNode } from './SystemInfoNode.js'
 import { GetLoginInfoNode } from './GetLoginInfoNode.js'
 import { LlmNode } from './LlmNode.js'
+import { DictionaryNode } from './DictionaryNode.js'
 
 /**
  * 导出所有内置节点
@@ -30,6 +31,7 @@ export const builtinNodes = [
     new CustomJSNode(),
     new IfElseNode(),
     new CommandAnalNode(),
+    new DictionaryNode(),
     new MergeNode(),
     new LoopStartNode(),
     new LoopEndNode(),
@@ -50,6 +52,7 @@ export {
     CustomJSNode,
     IfElseNode,
     CommandAnalNode,
+    DictionaryNode,
     MergeNode,
     LoopStartNode,
     LoopEndNode,

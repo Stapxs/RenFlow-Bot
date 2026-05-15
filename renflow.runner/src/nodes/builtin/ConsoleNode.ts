@@ -61,7 +61,6 @@ export class ConsoleNode extends BaseNode {
         params: Record<string, any>,
         context: NodeContext
     ): Promise<NodeExecutionResult> {
-        console.log(input)
         const { message, logLevel = 'log', includeInput = false } = params
 
         // 模板渲染：支持使用 {path.to.field} 语法引用 input 中的字段
